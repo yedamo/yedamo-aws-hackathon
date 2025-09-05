@@ -1,12 +1,13 @@
 import { useState } from 'react'
 
-function PersonalInfoForm({ onSubmit }) {
+function PersonalInfoForm({ onSubmit, isLoading }) {
   const [formData, setFormData] = useState({
     name: '',
     birthDate: '',
-    birthTime: '',
+    birthHour: '',
     gender: 'male',
-    calendarType: 'solar'
+    calendarType: 'solar',
+    timezone: 'korea'
   })
 
   const handleSubmit = (e) => {
@@ -58,16 +59,40 @@ function PersonalInfoForm({ onSubmit }) {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            출생시간
+            출생시간 (시)
           </label>
-          <input
-            type="time"
-            name="birthTime"
-            value={formData.birthTime}
+          <select
+            name="birthHour"
+            value={formData.birthHour}
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
             required
-          />
+          >
+            <option value="">시간 선택</option>
+            {Array.from({ length: 24 }, (_, i) => (
+              <option key={i} value={i}>
+                {i}시
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            타임존
+          </label>
+          <select
+            name="timezone"
+            value={formData.timezone}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+          >
+            <option value="korea">한국 (Asia/Seoul)</option>
+            <option value="usa_east">미국 동부 (America/New_York)</option>
+            <option value="usa_west">미국 서부 (America/Los_Angeles)</option>
+            <option value="china">중국 (Asia/Shanghai)</option>
+            <option value="japan">일본 (Asia/Tokyo)</option>
+          </select>
         </div>
 
         <div>
@@ -102,9 +127,10 @@ function PersonalInfoForm({ onSubmit }) {
 
         <button
           type="submit"
-          className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 transition duration-200"
+          disabled={isLoading}
+          className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:opacity-50 transition duration-200"
         >
-          사주 분석하기
+          {isLoading ? '분석 중...' : '사주 분석하기'}
         </button>
       </form>
     </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import axios from 'axios'
 
-function ChatInterface({ personalInfo, sajuData, onGoHome }) {
+function ChatInterface({ personalInfo, sajuData, cacheKey, onGoHome }) {
   const [messages, setMessages] = useState([
     {
       type: 'ai',
@@ -16,18 +17,36 @@ function ChatInterface({ personalInfo, sajuData, onGoHome }) {
 
     const userMessage = { type: 'user', content: inputMessage }
     setMessages(prev => [...prev, userMessage])
+    const currentQuestion = inputMessage
     setInputMessage('')
     setIsLoading(true)
 
-    // 실제로는 백엔드 API 호출
-    setTimeout(() => {
+    try {
+      const requestData = {
+        cache_key: cacheKey,
+        question: currentQuestion
+      }
+
+      const response = await axios.post(
+        'https://a2lqo7fctd.execute-api.us-east-1.amazonaws.com/prod/saju/consultation',
+        requestData
+      )
+
       const aiResponse = {
         type: 'ai',
-        content: `${inputMessage}에 대한 답변입니다. 사주 분석 결과를 바탕으로 조언드리면, 현재 대운 상황을 고려할 때 신중한 접근이 필요합니다.`
+        content: response.data.answer || response.data.message || '답변을 받지 못했습니다.'
       }
       setMessages(prev => [...prev, aiResponse])
+    } catch (error) {
+      console.error('상담 요청 실패:', error)
+      const errorResponse = {
+        type: 'ai',
+        content: '죄송합니다. 상담 요청에 실패했습니다. 다시 시도해주세요.'
+      }
+      setMessages(prev => [...prev, errorResponse])
+    } finally {
       setIsLoading(false)
-    }, 1500)
+    }
   }
 
   return (
