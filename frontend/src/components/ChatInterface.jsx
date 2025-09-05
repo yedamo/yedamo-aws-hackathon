@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import axios from 'axios'
+import apiClient from '../api/client'
 
 function ChatInterface({ personalInfo, sajuData, cacheKey, onGoHome }) {
   const [messages, setMessages] = useState([
@@ -27,10 +27,7 @@ function ChatInterface({ personalInfo, sajuData, cacheKey, onGoHome }) {
         question: currentQuestion
       }
 
-      const response = await axios.post(
-        'https://a2lqo7fctd.execute-api.us-east-1.amazonaws.com/prod/saju/consultation',
-        requestData
-      )
+      const response = await apiClient.post('/saju/consultation', requestData)
 
       const aiResponse = {
         type: 'ai',

@@ -187,7 +187,7 @@ resource "aws_codebuild_project" "frontend" {
 
   source {
     type            = "GITHUB"
-    location        = "https://github.com/sulmo/yedamo-aws-hackathon.git"
+    location        = "https://github.com/yedamo/yedamo-aws-hackathon.git"
     git_clone_depth = 1
     
     git_submodules_config {

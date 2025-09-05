@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import axios from 'axios'
+import apiClient from './api/client'
 import PersonalInfoForm from './components/PersonalInfoForm'
 import SajuResult from './components/SajuResult'
 import ChatInterface from './components/ChatInterface'
@@ -36,10 +36,7 @@ function App() {
         }
       }
 
-      const response = await axios.post(
-        'https://a2lqo7fctd.execute-api.us-east-1.amazonaws.com/prod/saju/basic',
-        requestData
-      )
+      const response = await apiClient.post('/saju/basic', requestData)
 
       setPersonalInfo(info)
       setSajuData(response.data.saju_analysis)
