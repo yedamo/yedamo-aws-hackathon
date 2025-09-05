@@ -1,0 +1,63 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Checking for frontend changes...
+      - |
+        CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD || echo "frontend/")
+        echo "Changed files: $CHANGED_FILES"
+        
+        if echo "$CHANGED_FILES" | grep -q "^frontend/"; then
+          echo "Frontend changes detected. Proceeding with build..."
+          export SHOULD_BUILD=true
+        else
+          echo "No frontend changes detected. Skipping build..."
+          export SHOULD_BUILD=false
+        fi
+  
+  install:
+    runtime-versions:
+      nodejs: 18
+    commands:
+      - |
+        if [ "$SHOULD_BUILD" = "true" ]; then
+          echo Installing dependencies...
+          cd frontend
+          npm install -g yarn
+          yarn install
+        else
+          echo Skipping install phase...
+        fi
+  
+  build:
+    commands:
+      - |
+        if [ "$SHOULD_BUILD" = "true" ]; then
+          echo Building the application...
+          cd frontend
+          yarn build
+        else
+          echo Skipping build phase...
+        fi
+      
+  post_build:
+    commands:
+      - |
+        if [ "$SHOULD_BUILD" = "true" ]; then
+          echo Build completed
+          echo Uploading to S3...
+          cd frontend
+          aws s3 sync dist/ s3://yedamo-frontend-3si02day --delete
+          echo Invalidating CloudFront cache...
+          aws cloudfront create-invalidation --distribution-id E1LD293UU79DMN --paths "/*"
+          echo Frontend deployment completed!
+        else
+          echo No deployment needed - no frontend changes detected
+        fi
+
+artifacts:
+  files:
+    - '**/*'
+  base-directory: frontend/dist
+  name: yedamo-frontend-$(date +%Y-%m-%d)
