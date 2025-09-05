@@ -103,7 +103,7 @@ class YedamoStack(Stack):
             }
         )
 
-        # Lambda 함수 (멀티에이전트 + 캐시 지원)
+        # Lambda 함수 (멀티에이전트 + 캐시 지원 + Node.js)
         saju_lambda = _lambda.Function(
             self, "SajuLambda",
             runtime=_lambda.Runtime.PYTHON_3_11,
@@ -114,7 +114,10 @@ class YedamoStack(Stack):
                     image=_lambda.Runtime.PYTHON_3_11.bundling_image,
                     command=[
                         "bash", "-c",
-                        "pip install -r requirements.txt -t /asset-output && cp -au . /asset-output"
+                        "curl -fsSL https://rpm.nodesource.com/setup_18.x | bash - && "
+                        "yum install -y nodejs && "
+                        "pip install -r requirements.txt -t /asset-output && "
+                        "cp -au . /asset-output"
                     ],
                     user="root"
                 )
@@ -132,7 +135,9 @@ class YedamoStack(Stack):
                 "REDIS_HOST": redis_cluster.attr_redis_endpoint_address,
                 "REDIS_PORT": "6379",
                 "CACHE_TTL": "1800",  # 30분
-                "CACHE_REFRESH_THRESHOLD": "300"  # 5분
+                "CACHE_REFRESH_THRESHOLD": "300",  # 5분
+                "PATH": "/var/lang/bin:/usr/local/bin:/usr/bin/:/bin:/opt/bin:/var/runtime:/usr/local/sbin:/usr/sbin:/sbin",
+                "NODE_PATH": "/usr/lib/node_modules"
             }
         )
 
