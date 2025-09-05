@@ -10,6 +10,7 @@ from aws_cdk import (
 )
 from constructs import Construct
 
+
 class YedamoStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -39,7 +40,7 @@ class YedamoStack(Stack):
             description="Subnet group for Yedamo cache",
             subnet_ids=[subnet.subnet_id for subnet in vpc.private_subnets]
         )
-        
+
         # VPC 서브넷에 대한 의존성 명시적 설정
         for subnet in vpc.private_subnets:
             cache_subnet_group.node.add_dependency(subnet)
@@ -75,7 +76,7 @@ class YedamoStack(Stack):
             cache_subnet_group_name=cache_subnet_group.ref,
             vpc_security_group_ids=[cache_security_group.security_group_id]
         )
-        
+
         # 의존성 명시적 설정
         redis_cluster.add_dependency(cache_subnet_group)
 
@@ -84,8 +85,10 @@ class YedamoStack(Stack):
             self, "YedamoLambdaRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole")
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaBasicExecutionRole"),
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaVPCAccessExecutionRole")
             ],
             inline_policies={
                 "BedrockAccess": iam.PolicyDocument(
@@ -112,14 +115,16 @@ class YedamoStack(Stack):
                     command=[
                         "bash", "-c",
                         "pip install -r requirements.txt -t /asset-output && cp -au . /asset-output"
-                    ]
+                    ],
+                    user="root"
                 )
             ),
             role=lambda_role,
             timeout=Duration.seconds(60),
             memory_size=512,
             vpc=vpc,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+            vpc_subnets=ec2.SubnetSelection(
+                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
             security_groups=[lambda_security_group],
             environment={
                 "MODEL_ID": "anthropic.claude-3-haiku-20240307-v1:0",
@@ -146,11 +151,11 @@ class YedamoStack(Stack):
         # API 리소스 및 메서드
         saju_resource = api.root.add_resource("saju")
         saju_integration = apigw.LambdaIntegration(saju_lambda)
-        
+
         # 기본 사주 API
         basic_resource = saju_resource.add_resource("basic")
         basic_resource.add_method("POST", saju_integration)
-        
+
         # 질의응답 API
         consultation_resource = saju_resource.add_resource("consultation")
         consultation_resource.add_method("POST", saju_integration)
@@ -161,26 +166,28 @@ class YedamoStack(Stack):
             vpc=vpc,
             description="Security group for bastion host"
         )
-        
+
         # SSH 접근 허용
         bastion_security_group.add_ingress_rule(
             peer=ec2.Peer.any_ipv4(),
             connection=ec2.Port.tcp(22),
             description="SSH access"
         )
-        
+
         # 베스천에서 ElastiCache 접근 허용
         cache_security_group.add_ingress_rule(
             peer=bastion_security_group,
             connection=ec2.Port.tcp(6379),
             description="Allow bastion to access Redis"
         )
-        
+
         # 베스천 호스트 인스턴스
         bastion_host = ec2.Instance(
             self, "YedamoBastionHost",
-            instance_type=ec2.InstanceType.of(ec2.InstanceClass.T2, ec2.InstanceSize.MICRO),
-            machine_image=ec2.AmazonLinuxImage(generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2),
+            instance_type=ec2.InstanceType.of(
+                ec2.InstanceClass.T2, ec2.InstanceSize.MICRO),
+            machine_image=ec2.AmazonLinuxImage(
+                generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2),
             vpc=vpc,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
             security_group=bastion_security_group,
@@ -192,8 +199,15 @@ class YedamoStack(Stack):
                 "echo 'Redis CLI 설치 완료' > /home/ec2-user/redis-ready.txt"
             )
         )
-        
+
         # 출력
         self.api_url = api.url
         self.redis_endpoint = redis_cluster.attr_redis_endpoint_address
         self.bastion_public_ip = bastion_host.instance_public_ip
+
+        # 환경변수 확인용 출력
+        from aws_cdk import CfnOutput
+        CfnOutput(self, "RedisHost",
+                  value=redis_cluster.attr_redis_endpoint_address)
+        CfnOutput(self, "LambdaEnvVars",
+                  value=f"REDIS_HOST={redis_cluster.attr_redis_endpoint_address}")

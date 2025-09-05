@@ -8,6 +8,10 @@ from cache_manager import cache_manager
 
 
 def handler(event, context):
+    # 환경변수 로깅
+    print(f"REDIS_HOST: {os.environ.get('REDIS_HOST', 'NOT_SET')}")
+    print(f"REDIS_PORT: {os.environ.get('REDIS_PORT', 'NOT_SET')}")
+    
     try:
         path = event.get('path', '')
         body = json.loads(event['body'])

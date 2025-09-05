@@ -1,13 +1,14 @@
 import json
 import time
 import redis
+import os
 from typing import Dict, Any, Optional, Tuple
 
 class CacheManager:
     def __init__(self):
         self.redis_client = redis.Redis(
-            host='yed-ye-1xngxtagsrugz.cache.amazonaws.com',
-            port=6379,
+            host=os.environ.get('REDIS_HOST', 'localhost'),
+            port=int(os.environ.get('REDIS_PORT', '6379')),
             decode_responses=True
         )
         self.TTL = 30 * 60  # 30분
