@@ -82,18 +82,46 @@ class SajuAgent(BaseAgent):
         return all(field in data for field in required_fields)
 
     def _enhance_mcp_data(self, mcp_data: Dict[str, Any]) -> Dict[str, Any]:
-        """MCP 데이터 보강 및 표준화"""
-        enhanced = {
-            'year_pillar': mcp_data.get('bazi', {}).get('year', '미상'),
-            'month_pillar': mcp_data.get('bazi', {}).get('month', '미상'),
-            'day_pillar': mcp_data.get('bazi', {}).get('day', '미상'),
-            'hour_pillar': mcp_data.get('bazi', {}).get('hour', '미상'),
-            'elements': self._extract_elements(mcp_data.get('bazi', {})),
-            'dayun': mcp_data.get('dayun', []),
-            'liunian': mcp_data.get('liunian', {}),
-            'raw_mcp_data': mcp_data
+        """MCP 데이터를 표준 형식으로 변환"""
+        # 원본 데이터에서 사주팔자 정보 추출
+        bazi = mcp_data.get('四柱', {})
+        wuxing = mcp_data.get('五行', {})
+        
+        # 오행 분석 생성
+        total_elements = sum(wuxing.values()) if wuxing else 8
+        wuxing_analysis = []
+        element_names = {'木': '목', '火': '화', '土': '토', '金': '금', '水': '수'}
+        
+        for element, count in wuxing.items():
+            korean_name = element_names.get(element, element)
+            percentage = (count / total_elements * 100) if total_elements > 0 else 0
+            strength = "강함" if count >= 3 else "보통" if count == 2 else "약함"
+            wuxing_analysis.append(f"{korean_name}: {count}개 ({percentage:.1f}%) - {strength}")
+        
+        return {
+            "success": True,
+            "data": {
+                "name": "사용자",
+                "translatedData": {
+                    "사주팔자": {
+                        "년주": bazi.get('年柱', '미상'),
+                        "월주": bazi.get('月柱', '미상'),
+                        "일주": bazi.get('日柱', '미상'),
+                        "시주": bazi.get('时柱', '미상')
+                    },
+                    "오행": {element_names.get(k, k): v for k, v in wuxing.items()},
+                    "띠": mcp_data.get('生肖', '미상'),
+                    "별자리": mcp_data.get('星座', '미상'),
+                    "일주천간": mcp_data.get('日主', '미상'),
+                    "원본데이터": mcp_data
+                },
+                "wuxingAnalysis": wuxing_analysis,
+                "rawData": {
+                    "content": [{"type": "text", "text": json.dumps(mcp_data, ensure_ascii=False)}],
+                    "isError": False
+                }
+            }
         }
-        return enhanced
 
     def _extract_elements(self, bazi_data: Dict[str, Any]) -> str:
         """바지 데이터에서 오행 추출"""
@@ -119,48 +147,75 @@ class SajuAgent(BaseAgent):
 
     def calculate_saju_basic(self, birth_info: Dict[str, Any]) -> Dict[str, Any]:
         """기본 사주 계산 (폴백)"""
+        basic_data = {
+            "四柱": {
+                "年柱": f"{birth_info['year']}년주",
+                "月柱": f"{birth_info['month']}월주", 
+                "日柱": f"{birth_info['day']}일주",
+                "时柱": f"{birth_info['hour']}시주"
+            },
+            "五行": {"木": 1, "火": 2, "土": 2, "金": 1, "水": 2},
+            "生肖": "미상",
+            "星座": "미상",
+            "日主": "미상"
+        }
+        
         return {
-            'year_pillar': f"{birth_info['year']}년주",
-            'month_pillar': f"{birth_info['month']}월주",
-            'day_pillar': f"{birth_info['day']}일주",
-            'hour_pillar': f"{birth_info['hour']}시주",
-            'elements': '기본 오행 분석',
-            'birth_date': f"{birth_info['year']}-{birth_info['month']:02d}-{birth_info['day']:02d}"
+            "success": True,
+            "data": {
+                "name": "사용자",
+                "translatedData": {
+                    "사주팔자": {
+                        "년주": basic_data["四柱"]["年柱"],
+                        "월주": basic_data["四柱"]["月柱"],
+                        "일주": basic_data["四柱"]["日柱"],
+                        "시주": basic_data["四柱"]["时柱"]
+                    },
+                    "오행": {"목": 1, "화": 2, "토": 2, "금": 1, "수": 2},
+                    "띠": "미상",
+                    "별자리": "미상",
+                    "일주천간": "미상",
+                    "원본데이터": basic_data
+                },
+                "wuxingAnalysis": [
+                    "목: 1개 (12.5%) - 약함",
+                    "화: 2개 (25.0%) - 보통", 
+                    "토: 2개 (25.0%) - 보통",
+                    "금: 1개 (12.5%) - 약함",
+                    "수: 2개 (25.0%) - 보통"
+                ],
+                "rawData": {
+                    "content": [{"type": "text", "text": json.dumps(basic_data, ensure_ascii=False)}],
+                    "isError": False
+                }
+            }
         }
 
     def process(self, birth_info, question):
         # 통합 사주 데이터 생성
         saju_data = self.get_bazi_info(birth_info)
-
+        
+        # 사주 데이터에서 상담 내용 생성
+        translated_data = saju_data.get("data", {}).get("translatedData", {})
+        saju_info = translated_data.get("사주팔자", {})
+        wuxing_analysis = saju_data.get("data", {}).get("wuxingAnalysis", [])
+        
         prompt = f"""
 {self.get_system_prompt()}
 
 생년월일시: {birth_info}
-사주 데이터: {saju_data}
+사주팔자: {saju_info}
+오행분석: {wuxing_analysis}
 질문: {question}
 
-다음 형식으로 JSON 응답해주세요:
-{{
-  "agent_type": "saju",
-  "saju_analysis": {{
-    "year_pillar": "년주",
-    "month_pillar": "월주",
-    "day_pillar": "일주", 
-    "hour_pillar": "시주",
-    "elements": "오행분석",
-    "birth_date": "생년월일"
-  }},
-  "consultation": "사주팔자 기반 성격과 타고난 운명 분석"
-}}
+사주팔자를 바탕으로 성격, 재능, 기본 운명을 분석해주세요.
 """
 
-        response = self.invoke_bedrock(prompt)
-
-        try:
-            return json.loads(response)
-        except:
-            return {
-                "agent_type": "saju",
-                "saju_analysis": saju_data,
-                "consultation": response
-            }
+        consultation = self.invoke_bedrock(prompt)
+        
+        # 기존 사주 데이터에 상담 내용 추가
+        result = saju_data.copy()
+        result["data"]["consultation"] = consultation
+        result["agent_type"] = "saju"
+        
+        return result

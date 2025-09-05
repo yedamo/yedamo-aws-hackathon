@@ -67,10 +67,26 @@ curl -X POST {api_url}saju \\
 
 
 def destroy():
-    """리소스 삭제"""
+    """리소스 삭제 (순서대로)"""
     print("🗑️ 리소스 삭제 중...")
     cdk_dir = os.path.join(os.getcwd(), "cdk")
-    run_command("cdk destroy --force", cwd=cdk_dir)
+    
+    # CDK 스택 삭제
+    print("📋 CDK 스택 삭제 중...")
+    try:
+        run_command("cdk destroy --force", cwd=cdk_dir)
+        print("✅ CDK 스택 삭제 완료")
+    except Exception as e:
+        print(f"❌ CDK 스택 삭제 실패: {e}")
+        
+        # 수동 리소스 정리 시도
+        print("🔧 수동 리소스 정리 시도...")
+        try:
+            cleanup_resources()
+        except Exception as cleanup_error:
+            print(f"❌ 수동 정리도 실패: {cleanup_error}")
+            raise e
+    
     print("✅ 리소스 삭제 완료")
 
 
@@ -81,15 +97,143 @@ def redeploy():
     # 기존 리소스 삭제
     try:
         destroy()
-    except:
-        print("기존 리소스 없음 또는 삭제 실패")
+    except Exception as e:
+        print(f"기존 리소스 삭제 실패: {e}")
+        print("수동으로 리소스를 확인하고 삭제해주세요.")
+        return
     
-    print("\n⏳ 5초 대기...")
+    print("\n⏳ 120초 대기 (리소스 완전 삭제 확인)...")
     import time
-    time.sleep(5)
+    time.sleep(120)
     
     # 새로 배포
     deploy()
+
+
+def cleanup_resources():
+    """수동 리소스 정리 (VPC 의존성 순서대로)"""
+    import boto3
+    import time
+    
+    print("🧹 수동 리소스 정리 시작 (순서: Lambda → EC2 → ElastiCache → 보안그룹 → VPC)")
+    
+    # 1단계: Lambda 함수 삭제
+    try:
+        lambda_client = boto3.client('lambda')
+        functions = lambda_client.list_functions()
+        for func in functions['Functions']:
+            if 'yedamo' in func['FunctionName'].lower():
+                print(f"Lambda 함수 삭제: {func['FunctionName']}")
+                lambda_client.delete_function(FunctionName=func['FunctionName'])
+        time.sleep(10)
+    except Exception as e:
+        print(f"Lambda 정리 실패: {e}")
+    
+    # 2단계: EC2 인스턴스 종료
+    try:
+        ec2 = boto3.client('ec2')
+        instances = ec2.describe_instances(
+            Filters=[{'Name': 'tag:Name', 'Values': ['*Yedamo*', '*yedamo*']}]
+        )
+        instance_ids = []
+        for reservation in instances['Reservations']:
+            for instance in reservation['Instances']:
+                if instance['State']['Name'] not in ['terminated', 'terminating']:
+                    instance_ids.append(instance['InstanceId'])
+        
+        if instance_ids:
+            print(f"EC2 인스턴스 종료: {instance_ids}")
+            ec2.terminate_instances(InstanceIds=instance_ids)
+            print("⏳ EC2 종료 대기 (60초)...")
+            time.sleep(60)
+    except Exception as e:
+        print(f"EC2 정리 실패: {e}")
+    
+    # 3단계: ElastiCache 클러스터 삭제
+    try:
+        elasticache = boto3.client('elasticache')
+        clusters = elasticache.describe_cache_clusters()
+        for cluster in clusters['CacheClusters']:
+            if 'yedamo' in cluster['CacheClusterId'].lower():
+                print(f"ElastiCache 클러스터 삭제: {cluster['CacheClusterId']}")
+                elasticache.delete_cache_cluster(
+                    CacheClusterId=cluster['CacheClusterId']
+                )
+        
+        # 서브넷 그룹 삭제
+        subnet_groups = elasticache.describe_cache_subnet_groups()
+        for sg in subnet_groups['CacheSubnetGroups']:
+            if 'yedamo' in sg['CacheSubnetGroupName'].lower():
+                print(f"ElastiCache 서브넷 그룹 삭제: {sg['CacheSubnetGroupName']}")
+                elasticache.delete_cache_subnet_group(
+                    CacheSubnetGroupName=sg['CacheSubnetGroupName']
+                )
+        
+        print("⏳ ElastiCache 삭제 대기 (60초)...")
+        time.sleep(60)
+    except Exception as e:
+        print(f"ElastiCache 정리 실패: {e}")
+    
+    # 4단계: 보안 그룹 삭제
+    try:
+        security_groups = ec2.describe_security_groups(
+            Filters=[{'Name': 'group-name', 'Values': ['*Yedamo*', '*yedamo*']}]
+        )
+        for sg in security_groups['SecurityGroups']:
+            if sg['GroupName'] != 'default':
+                print(f"보안 그룹 삭제: {sg['GroupId']} ({sg['GroupName']})")
+                try:
+                    ec2.delete_security_group(GroupId=sg['GroupId'])
+                except Exception as sg_error:
+                    print(f"보안 그룹 삭제 실패: {sg_error}")
+        time.sleep(10)
+    except Exception as e:
+        print(f"보안 그룹 정리 실패: {e}")
+    
+    # 5단계: VPC 삭제
+    try:
+        vpcs = ec2.describe_vpcs(
+            Filters=[{'Name': 'tag:Name', 'Values': ['*Yedamo*', '*yedamo*']}]
+        )
+        for vpc in vpcs['Vpcs']:
+            vpc_id = vpc['VpcId']
+            print(f"VPC 삭제: {vpc_id}")
+            
+            # 서브넷 삭제
+            subnets = ec2.describe_subnets(Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}])
+            for subnet in subnets['Subnets']:
+                print(f"서브넷 삭제: {subnet['SubnetId']}")
+                ec2.delete_subnet(SubnetId=subnet['SubnetId'])
+            
+            # 인터넷 게이트웨이 삭제
+            igws = ec2.describe_internet_gateways(
+                Filters=[{'Name': 'attachment.vpc-id', 'Values': [vpc_id]}]
+            )
+            for igw in igws['InternetGateways']:
+                print(f"인터넷 게이트웨이 디타치: {igw['InternetGatewayId']}")
+                ec2.detach_internet_gateway(InternetGatewayId=igw['InternetGatewayId'], VpcId=vpc_id)
+                ec2.delete_internet_gateway(InternetGatewayId=igw['InternetGatewayId'])
+            
+            # VPC 삭제
+            ec2.delete_vpc(VpcId=vpc_id)
+            
+    except Exception as e:
+        print(f"VPC 정리 실패: {e}")
+    
+    # 6단계: CloudFormation 스택 삭제
+    try:
+        cf = boto3.client('cloudformation')
+        stacks = cf.list_stacks(StackStatusFilter=['CREATE_COMPLETE', 'UPDATE_COMPLETE', 'DELETE_FAILED'])
+        for stack in stacks['StackSummaries']:
+            if 'yedamo' in stack['StackName'].lower():
+                print(f"CloudFormation 스택 삭제: {stack['StackName']}")
+                cf.delete_stack(StackName=stack['StackName'])
+                print("⏳ 스택 삭제 대기 (60초)...")
+                time.sleep(60)
+    except Exception as e:
+        print(f"CloudFormation 스택 정리 실패: {e}")
+    
+    print("✅ 수동 리소스 정리 완료")
 
 
 if __name__ == "__main__":
@@ -98,7 +242,9 @@ if __name__ == "__main__":
             destroy()
         elif sys.argv[1] == "redeploy":
             redeploy()
+        elif sys.argv[1] == "cleanup":
+            cleanup_resources()
         else:
-            print("사용법: python deploy.py [destroy|redeploy]")
+            print("사용법: python deploy.py [destroy|redeploy|cleanup]")
     else:
         deploy()

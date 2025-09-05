@@ -6,6 +6,7 @@ from aws_cdk import (
     aws_elasticache as elasticache,
     aws_ec2 as ec2,
     Duration,
+    BundlingOptions,
 )
 from constructs import Construct
 
@@ -104,7 +105,16 @@ class YedamoStack(Stack):
             self, "SajuLambda",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="index.handler",
-            code=_lambda.Code.from_asset("../lambda"),
+            code=_lambda.Code.from_asset(
+                "../lambda",
+                bundling=BundlingOptions(
+                    image=_lambda.Runtime.PYTHON_3_11.bundling_image,
+                    command=[
+                        "bash", "-c",
+                        "pip install -r requirements.txt -t /asset-output && cp -au . /asset-output"
+                    ]
+                )
+            ),
             role=lambda_role,
             timeout=Duration.seconds(60),
             memory_size=512,
@@ -145,6 +155,45 @@ class YedamoStack(Stack):
         consultation_resource = saju_resource.add_resource("consultation")
         consultation_resource.add_method("POST", saju_integration)
 
+        # ElastiCache CLI용 베스천 호스트
+        bastion_security_group = ec2.SecurityGroup(
+            self, "YedamoBastionSecurityGroup",
+            vpc=vpc,
+            description="Security group for bastion host"
+        )
+        
+        # SSH 접근 허용
+        bastion_security_group.add_ingress_rule(
+            peer=ec2.Peer.any_ipv4(),
+            connection=ec2.Port.tcp(22),
+            description="SSH access"
+        )
+        
+        # 베스천에서 ElastiCache 접근 허용
+        cache_security_group.add_ingress_rule(
+            peer=bastion_security_group,
+            connection=ec2.Port.tcp(6379),
+            description="Allow bastion to access Redis"
+        )
+        
+        # 베스천 호스트 인스턴스
+        bastion_host = ec2.Instance(
+            self, "YedamoBastionHost",
+            instance_type=ec2.InstanceType.of(ec2.InstanceClass.T2, ec2.InstanceSize.MICRO),
+            machine_image=ec2.AmazonLinuxImage(generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2),
+            vpc=vpc,
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
+            security_group=bastion_security_group,
+            key_name="yedamo-key-pair",
+            user_data=ec2.UserData.custom(
+                "#!/bin/bash\n"
+                "yum update -y\n"
+                "yum install -y redis\n"
+                "echo 'Redis CLI 설치 완료' > /home/ec2-user/redis-ready.txt"
+            )
+        )
+        
         # 출력
         self.api_url = api.url
         self.redis_endpoint = redis_cluster.attr_redis_endpoint_address
+        self.bastion_public_ip = bastion_host.instance_public_ip
