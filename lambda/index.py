@@ -3,11 +3,8 @@ import os
 from supervisor import SupervisorAgent
 from agents.saju_agent import SajuAgent
 
-# 환경에 따른 캐시 매니저 선택
-if os.environ.get('REDIS_HOST'):
-    from redis_cache_manager import redis_cache_manager as cache_manager
-else:
-    from cache_manager import cache_manager
+# 통합 캐시 매니저 사용
+from cache_manager import cache_manager
 
 
 def handler(event, context):
