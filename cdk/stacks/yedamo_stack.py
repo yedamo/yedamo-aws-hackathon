@@ -6,6 +6,7 @@ from aws_cdk import (
     aws_elasticache as elasticache,
     aws_ec2 as ec2,
     Duration,
+    BundlingOptions,
 )
 from constructs import Construct
 
@@ -104,7 +105,16 @@ class YedamoStack(Stack):
             self, "SajuLambda",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="index.handler",
-            code=_lambda.Code.from_asset("../lambda"),
+            code=_lambda.Code.from_asset(
+                "../lambda",
+                bundling=BundlingOptions(
+                    image=_lambda.Runtime.PYTHON_3_11.bundling_image,
+                    command=[
+                        "bash", "-c",
+                        "pip install -r requirements.txt -t /asset-output && cp -au . /asset-output"
+                    ]
+                )
+            ),
             role=lambda_role,
             timeout=Duration.seconds(60),
             memory_size=512,
