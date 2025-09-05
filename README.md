@@ -36,8 +36,111 @@ Amazon Q Developer로 구현한 어플리케이션의 데모 영상을 입력합
 
 ## 리소스 배포하기
 
-해당 코드를 AWS 상에 배포하기 위한 방법을 설명합니다. 인프라를 배포했을 경우 출력되는 AWS 아키텍처도 함께 포함하며, 리소스를 삭제하는 방안도 함께 작성합니다.
+### 아키텍처
+```
+사용자 → API Gateway → Lambda (Supervisor) → 멀티에이전트
+                                          ├── SajuAgent (사주팔자 + MCP)
+                                          ├── FortuneAgent (운세예측)  
+                                          ├── CompatibilityAgent (궁합)
+                                          ├── QuestionAnalyzer (질문분석)
+                                          ├── ResponseGenerator (응답생성)
+                                          └── KnowledgeAgent (RAG)
+                                          ↓
+                                      Amazon Bedrock
+```
 
-## 프로젝트 기대 효과 및 예상 사용 사례
+### 배포 방법
 
-해당 프로젝트의 기대 효과와 예상되는 사용 사례를 작성합니다.
+**1. 사전 요구사항**
+- AWS CLI 설치 및 구성
+- Python 3.11+
+- AWS CDK 설치: `npm install -g aws-cdk`
+
+**2. 배포 실행**
+```bash
+# 배포
+python deploy.py
+
+# 리소스 삭제
+python deploy.py destroy
+```
+
+**3. 테스트**
+```bash
+# 테스트 클라이언트 실행
+python test_client.py
+```
+
+### 배포되는 AWS 리소스
+- **API Gateway**: REST API 엔드포인트
+- **Lambda Function**: 멀티에이전트 Supervisor 시스템
+  - SajuAgent: 사주팔자 계산 (MCP 지원)
+  - FortuneAgent: 운세 예측 (대운/세운)
+  - CompatibilityAgent: 궁합 분석
+  - QuestionAnalyzer: 질문 분류 및 분석
+  - ResponseGenerator: 통합 응답 생성
+  - KnowledgeAgent: 명리학 지식베이스
+- **IAM Role**: Lambda 실행 권한 (Bedrock 접근 포함)
+- **CloudWatch Logs**: 로그 저장
+
+### API 사용법
+
+**기본 형식:**
+```bash
+curl -X POST https://your-api-url/saju \
+  -H "Content-Type: application/json" \
+  -d '{
+    "birth_info": {
+      "year": 1990,
+      "month": 5,
+      "day": 15,
+      "hour": 14
+    },
+    "question": "올해 운세는 어떤가요?"
+  }'
+```
+
+**MCP 지원 형식:**
+```bash
+curl -X POST https://your-api-url/saju \
+  -H "Content-Type: application/json" \
+  -d '{
+    "birth_info": {
+      "birth_date": "1990-05-15",
+      "birth_time": "14:00",
+      "calendar": "solar",
+      "gender": "male"
+    },
+    "question": "내 사주팔자를 분석해주세요"
+  }'
+```
+
+## 멀티에이전트 시스템 특징
+
+### 지능형 라우팅
+- **QuestionAnalyzer**: 사용자 질문을 자동 분류
+- **Supervisor**: 적절한 전문 에이전트로 라우팅
+- **통합 응답**: 여러 에이전트 결과를 종합
+
+### MCP (Model Context Protocol) 지원
+- **정밀 사주 계산**: @mymcp-fun/bazi 활용
+- **폴백 메커니즘**: MCP 실패 시 기본 계산
+
+### RAG 기반 지식베이스
+- **KnowledgeAgent**: 명리학 전문 지식 활용
+- **오행 상극**: 전통 이론 기반 해석
+
+## 테스트 케이스
+
+1. **사주팔자 분석**: "내 사주팔자를 분석해주세요"
+2. **운세 예측**: "올해와 내년 운세는 어떤가요?"
+3. **궁합 분석**: "연애운과 결혼 적기가 언제인가요?"
+4. **직업 상담**: "이직을 고려 중인데 언제가 좋을까요?"
+5. **건강 운세**: "건강에 주의할 점이 있나요?"
+
+## 기대 효과
+
+- **전문성**: 각 영역별 전문 에이전트로 정확한 상담
+- **효율성**: 질문 자동 분류로 빠른 응답
+- **확장성**: 새로운 에이전트 추가 용이
+- **신뢰성**: MCP와 RAG로 정확한 명리학 이론 적용
