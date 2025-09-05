@@ -30,7 +30,6 @@ phases:
       nodejs: 18
     commands:
       - |
-        source $CODEBUILD_SRC_DIR/build_env 2>/dev/null || true
         if [ "$SHOULD_BUILD" = "true" ]; then
           echo Installing dependencies...
           cd frontend
@@ -43,7 +42,6 @@ phases:
   build:
     commands:
       - |
-        source $CODEBUILD_SRC_DIR/build_env 2>/dev/null || true
         if [ "$SHOULD_BUILD" = "true" ]; then
           echo Building the application...
           cd frontend
@@ -55,7 +53,6 @@ phases:
   post_build:
     commands:
       - |
-        source $CODEBUILD_SRC_DIR/build_env 2>/dev/null || true
         if [ "$SHOULD_BUILD" = "true" ]; then
           echo Build completed on `date`
           echo Uploading to S3...
