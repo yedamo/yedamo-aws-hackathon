@@ -40,3 +40,7 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# ec2 redis-cli 용
+yedamo-key-pair.pem
+etc/
