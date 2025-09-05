@@ -17,6 +17,15 @@ build/
 cdk.out/
 *.pem
 
+# Terraform
+infrastructure/.terraform/
+infrastructure/.terraform.lock.hcl
+infrastructure/terraform.tfstate
+infrastructure/terraform.tfstate.backup
+infrastructure/*.tfplan
+infrastructure/crash.log
+infrastructure/crash.*.log
+
 # Python
 __pycache__/
 *.pyc
@@ -26,6 +35,7 @@ __pycache__/
 env/
 venv/
 .venv/
+*.egg-info/
 
 # IDE
 .vscode/
@@ -44,3 +54,18 @@ logs/
 # ec2 redis-cli 용
 yedamo-key-pair.pem
 etc/
+
+# Frontend specific
+frontend/dist/
+frontend/node_modules/
+frontend/.vite/
+
+# Backend specific
+backend/__pycache__/
+backend/.pytest_cache/
+backend/venv/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
