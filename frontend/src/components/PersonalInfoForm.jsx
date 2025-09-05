@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-function PersonalInfoForm({ onSubmit }) {
+function PersonalInfoForm({ onSubmit, loading }) {
   const [formData, setFormData] = useState({
     name: '',
     birthDate: '',
@@ -102,9 +102,10 @@ function PersonalInfoForm({ onSubmit }) {
 
         <button
           type="submit"
-          className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 transition duration-200"
+          disabled={loading}
+          className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 transition duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
-          사주 분석하기
+          {loading ? '분석 중...' : '사주 분석하기'}
         </button>
       </form>
     </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import axios from 'axios'
 import PersonalInfoForm from './components/PersonalInfoForm'
 import SajuResult from './components/SajuResult'
 import ChatInterface from './components/ChatInterface'
@@ -7,16 +8,31 @@ function App() {
   const [step, setStep] = useState(1)
   const [personalInfo, setPersonalInfo] = useState(null)
   const [sajuData, setSajuData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
 
-  const handlePersonalInfoSubmit = (info) => {
-    setPersonalInfo(info)
-    // 실제로는 백엔드 API 호출하여 사주 계산
-    setSajuData({
-      sajupalja: "갑자년 을축월 병인일 정묘시",
-      daeun: "현재 대운: 무진 (2020-2029)",
-      seun: "2024년 갑진년 운세"
-    })
-    setStep(2)
+  const handlePersonalInfoSubmit = async (info) => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const response = await axios.post('http://localhost:3001/api/saju', {
+        birthDate: info.birthDate,
+        birthTime: info.birthTime,
+        isLunar: info.calendarType === 'lunar',
+        gender: info.gender,
+        name: info.name
+      })
+      
+      setPersonalInfo(info)
+      setSajuData(response.data.data)
+      setStep(2)
+    } catch (error) {
+      console.error('사주 분석 오류:', error)
+      setError('사주 분석 중 오류가 발생했습니다. 다시 시도해주세요.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleChatStart = () => {
@@ -38,7 +54,14 @@ function App() {
         </header>
 
         {step === 1 && (
-          <PersonalInfoForm onSubmit={handlePersonalInfoSubmit} />
+          <div>
+            {error && (
+              <div className="max-w-md mx-auto mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+                {error}
+              </div>
+            )}
+            <PersonalInfoForm onSubmit={handlePersonalInfoSubmit} loading={loading} />
+          </div>
         )}
 
         {step === 2 && (

@@ -34,6 +34,39 @@
 Amazon Q Developer로 구현한 어플리케이션의 데모 영상을 입력합니다.
 **Git의 Readme에는 GIF 형식으로 업로드하며, 원본 동영상은 발표 Presentation에 제출합니다.**
 
+## MCP 테스트 및 개발 환경 설정
+
+### 로컬 개발 환경에서 MCP 테스트하기
+
+1. **MCP 서버 및 애플리케이션 실행**
+   ```bash
+   # 프로젝트 루트에서 실행
+   ./start-servers.sh
+   ```
+
+2. **수동으로 각각 실행하기**
+   ```bash
+   # 백엔드 서버 (터미널 1)
+   cd backend
+   npm install
+   npm start
+   
+   # 프론트엔드 서버 (터미널 2)
+   cd frontend
+   yarn install
+   yarn dev
+   ```
+
+3. **접속 정보**
+   - 프론트엔드: http://localhost:3000
+   - 백엔드 API: http://localhost:3001
+
+### MCP 연동 확인사항
+
+- 백엔드 서버가 MCP 클라이언트로 `@mymcp/bazi` 패키지와 연결
+- 사주 분석 결과를 SajuResult 페이지에서 확인 가능
+- MCP 원본 데이터는 "MCP 원본 데이터" 섹션에서 JSON 형태로 표시
+
 ## 리소스 배포하기
 
 해당 코드를 AWS 상에 배포하기 위한 방법을 설명합니다. 인프라를 배포했을 경우 출력되는 AWS 아키텍처도 함께 포함하며, 리소스를 삭제하는 방안도 함께 작성합니다.
