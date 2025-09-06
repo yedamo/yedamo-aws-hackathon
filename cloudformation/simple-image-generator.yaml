@@ -1,0 +1,265 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Simple Bedrock Nova Pro Image Generation Service'
+
+Resources:
+  # IAM Role for Lambda
+  ImageGeneratorLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: yedamo-image-generator-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: '*'
+
+  # Lambda Function with inline code
+  ImageGeneratorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: yedamo-image-generator
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt ImageGeneratorLambdaRole.Arn
+      Timeout: 120
+      MemorySize: 1024
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import base64
+          from typing import Dict, Any
+
+          # 12지신 동물 목록
+          ZODIAC_ANIMALS = [
+              "쥐", "소", "호랑이", "토끼", "용", "뱀", 
+              "말", "양", "원숭이", "닭", "개", "돼지"
+          ]
+
+          def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
+              try:
+                  # CORS 헤더
+                  headers = {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                  }
+                  
+                  # OPTIONS 요청 처리
+                  if event.get('httpMethod') == 'OPTIONS':
+                      return {
+                          'statusCode': 200,
+                          'headers': headers,
+                          'body': json.dumps({'message': 'OK'})
+                      }
+                  
+                  # 요청 본문 파싱
+                  body = json.loads(event.get('body', '{}'))
+                  color = body.get('color', '').strip()
+                  animal = body.get('animal', '').strip()
+                  
+                  # 입력 검증
+                  if not color or not animal:
+                      return {
+                          'statusCode': 400,
+                          'headers': headers,
+                          'body': json.dumps({
+                              'error': 'color와 animal 파라미터가 필요합니다.',
+                              'required_animals': ZODIAC_ANIMALS
+                          })
+                      }
+                  
+                  if animal not in ZODIAC_ANIMALS:
+                      return {
+                          'statusCode': 400,
+                          'headers': headers,
+                          'body': json.dumps({
+                              'error': f'유효하지 않은 동물입니다. 12지신 중 하나를 선택해주세요.',
+                              'valid_animals': ZODIAC_ANIMALS
+                          })
+                      }
+                  
+                  # 프롬프트 생성
+                  prompt = f"A beautiful {color} colored {animal} in traditional Korean art style, elegant and mystical, high quality digital art"
+                  
+                  # Bedrock 클라이언트 생성
+                  bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
+                  
+                  # Nova Pro 모델 호출
+                  request_body = {
+                      "taskType": "TEXT_IMAGE",
+                      "textToImageParams": {
+                          "text": prompt,
+                          "images": []
+                      },
+                      "imageGenerationConfig": {
+                          "numberOfImages": 1,
+                          "height": 1024,
+                          "width": 1024,
+                          "cfgScale": 8.0,
+                          "seed": 42
+                      }
+                  }
+                  
+                  response = bedrock.invoke_model(
+                      modelId='amazon.nova-pro-v1:0',
+                      body=json.dumps(request_body),
+                      contentType='application/json'
+                  )
+                  
+                  # 응답 처리
+                  response_body = json.loads(response['body'].read())
+                  
+                  if 'images' in response_body and len(response_body['images']) > 0:
+                      # Base64 인코딩된 이미지 데이터
+                      image_data = response_body['images'][0]
+                      
+                      return {
+                          'statusCode': 200,
+                          'headers': headers,
+                          'body': json.dumps({
+                              'success': True,
+                              'prompt': prompt,
+                              'color': color,
+                              'animal': animal,
+                              'image': image_data,
+                              'format': 'base64'
+                          })
+                      }
+                  else:
+                      return {
+                          'statusCode': 500,
+                          'headers': headers,
+                          'body': json.dumps({
+                              'error': '이미지 생성에 실패했습니다.',
+                              'details': response_body
+                          })
+                      }
+                      
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'headers': headers,
+                      'body': json.dumps({
+                          'error': f'서버 오류: {str(e)}'
+                      })
+                  }
+
+  # API Gateway
+  ImageGeneratorApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: yedamo-image-generator-api
+      Description: Bedrock Nova Pro Image Generation API
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # API Gateway Resource
+  ImageResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ImageGeneratorApi
+      ParentId: !GetAtt ImageGeneratorApi.RootResourceId
+      PathPart: image
+
+  # API Gateway Method (POST)
+  ImagePostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ImageGeneratorApi
+      ResourceId: !Ref ImageResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ImageGeneratorLambda.Arn}/invocations'
+
+  # API Gateway Method (OPTIONS for CORS)
+  ImageOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ImageGeneratorApi
+      ResourceId: !Ref ImageResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+            ResponseTemplates:
+              application/json: ''
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  # API Gateway Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ImagePostMethod
+      - ImageOptionsMethod
+    Properties:
+      RestApiId: !Ref ImageGeneratorApi
+      StageName: prod
+
+  # Lambda Permission for API Gateway
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ImageGeneratorLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}:${ImageGeneratorApi}/*/POST/image'
+
+  # Lambda Permission for OPTIONS
+  LambdaApiGatewayOptionsPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ImageGeneratorLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}:${ImageGeneratorApi}/*/OPTIONS/image'
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway URL
+    Value: !Sub 'https://${ImageGeneratorApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiUrl'
+  
+  ImageEndpoint:
+    Description: Image generation endpoint
+    Value: !Sub 'https://${ImageGeneratorApi}.execute-api.${AWS::Region}.amazonaws.com/prod/image'
+    Export:
+      Name: !Sub '${AWS::StackName}-ImageEndpoint'
+  
+  LambdaFunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt ImageGeneratorLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaArn'
