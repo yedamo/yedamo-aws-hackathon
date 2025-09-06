@@ -253,7 +253,6 @@ class YedamoStack(Stack):
         image_resource = api.root.add_resource("image-generate")
         image_integration = apigw.LambdaIntegration(image_lambda)
         image_resource.add_method("POST", image_integration)
-        image_resource.add_method("OPTIONS", image_integration)
 
         # ElastiCache CLI용 베스천 호스트
         bastion_security_group = ec2.SecurityGroup(
