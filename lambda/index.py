@@ -1,20 +1,12 @@
 import json
 import os
 import requests
-from supervisor import SupervisorAgent
-
-# 통합 캐시 매니저 사용
-from cache_manager import cache_manager
 
 # Backend API URL
 BACKEND_URL = os.environ.get('BACKEND_URL', 'http://localhost:3001')
 
 
 def handler(event, context):
-    # 환경변수 로깅
-    print(f"REDIS_HOST: {os.environ.get('REDIS_HOST', 'NOT_SET')}")
-    print(f"REDIS_PORT: {os.environ.get('REDIS_PORT', 'NOT_SET')}")
-
     try:
         path = event.get('path', '')
         body = json.loads(event['body'])
@@ -22,7 +14,7 @@ def handler(event, context):
         if path == '/saju/basic':
             return handle_basic_saju(body)
         elif path == '/saju/consultation':
-            return handle_consultation(body)
+            return handle_consultation_proxy(body)
         else:
             return {
                 'statusCode': 404,
@@ -68,14 +60,6 @@ def handle_basic_saju(body):
         if response.status_code == 200:
             backend_data = response.json()
 
-            # 캐시에 저장 (backend에서 받은 cache_key 사용)
-            cache_key = backend_data.get('cache_key')
-            if cache_key:
-                cache_manager.set_cache(cache_key, {
-                    'birth_info': birth_info,
-                    'saju_analysis': backend_data.get('data', {})
-                })
-
             return {
                 'statusCode': 200,
                 'headers': {
@@ -83,7 +67,7 @@ def handle_basic_saju(body):
                     'Access-Control-Allow-Origin': '*'
                 },
                 'body': json.dumps({
-                    'cache_key': cache_key,
+                    'cache_key': backend_data.get('cache_key'),
                     'birth_info': birth_info,
                     'saju_analysis': backend_data.get('data', {}),
                     'backend_response': backend_data
@@ -99,38 +83,32 @@ def handle_basic_saju(body):
         raise Exception(f"사주 데이터 처리 실패: {str(e)}")
 
 
-def handle_consultation(body):
-    """질의응답 API - Supervisor 사용"""
-    cache_key = body.get('cache_key', '')
-    question = body.get('question', '')
-
-    if not cache_key:
-        raise ValueError('cache_key가 필요합니다')
-    if not question:
-        raise ValueError('질문이 필요합니다')
-
-    # Supervisor 사용 - cache_key만으로 처리
+def handle_consultation_proxy(body):
+    """상담 API - EC2 Backend로 프록시"""
     try:
-        supervisor = SupervisorAgent()
-        result = supervisor.route_request(cache_key, question)
-        
+        response = requests.post(
+            f"{BACKEND_URL}/saju/consultation",
+            json=body,
+            timeout=30
+        )
+
         return {
-            'statusCode': 200,
+            'statusCode': response.status_code,
             'headers': {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            'body': json.dumps(result, ensure_ascii=False)
+            'body': json.dumps(response.json(), ensure_ascii=False)
         }
 
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         return {
             'statusCode': 500,
             'headers': {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            'body': json.dumps({'error': str(e)}, ensure_ascii=False)
+            'body': json.dumps({'error': f'Backend 연결 실패: {str(e)}'}, ensure_ascii=False)
         }
 
 
@@ -151,19 +129,12 @@ def validate_birth_info(body):
     hour = birth_info['hour']
 
     if not (1900 <= year <= 2100):
-        raise ValueError('년도는 1900-2100 범위여야 합니다')
+        raise ValueError('연도는 1900-2100 사이여야 합니다')
     if not (1 <= month <= 12):
-        raise ValueError('월은 1-12 범위여야 합니다')
+        raise ValueError('월은 1-12 사이여야 합니다')
     if not (1 <= day <= 31):
-        raise ValueError('일은 1-31 범위여야 합니다')
+        raise ValueError('일은 1-31 사이여야 합니다')
     if not (0 <= hour <= 23):
-        raise ValueError('시간은 0-23 범위여야 합니다')
-
-    # 선택 필드 기본값 설정
-    birth_info.setdefault('gender', 'male')
-    birth_info.setdefault('timezone', 'Asia/Seoul')
-    birth_info.setdefault('isLunar', False)
+        raise ValueError('시간은 0-23 사이여야 합니다')
 
     return birth_info
-
-# Supervisor와 멀티에이전트가 모든 로직을 처리

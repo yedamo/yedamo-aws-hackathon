@@ -5,10 +5,16 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { spawn } from "child_process";
 import crypto from "crypto";
 import redis from "redis";
+import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import { translateSajuResult, analyzeWuxing } from "./utils/sajuTranslator.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Bedrock 클라이언트 설정
+const bedrockClient = new BedrockRuntimeClient({ 
+  region: process.env.AWS_REGION || "us-east-1" 
+});
 
 // Redis 클라이언트 설정
 let redisClient = null;
@@ -248,6 +254,106 @@ app.get("/api/saju/:cacheKey", async (req, res) => {
     });
   }
 });
+
+// 사주 상담 API (Lambda에서 이전)
+app.post("/saju/consultation", async (req, res) => {
+  try {
+    const { cache_key, question } = req.body;
+
+    if (!cache_key) {
+      return res.status(400).json({ error: "cache_key가 필요합니다" });
+    }
+    if (!question) {
+      return res.status(400).json({ error: "질문이 필요합니다" });
+    }
+
+    // Redis에서 캐시된 사주 데이터 조회
+    if (!redisConnected || !redisClient) {
+      return res.status(503).json({ error: "Redis 연결이 없습니다" });
+    }
+
+    const cachedJson = await redisClient.get(cache_key);
+    if (!cachedJson) {
+      return res.status(404).json({ 
+        error: "캐시에서 사주 데이터를 찾을 수 없습니다",
+        cache_key: cache_key
+      });
+    }
+
+    const cachedData = JSON.parse(cachedJson);
+    
+    // Bedrock을 사용한 AI 상담 응답 생성
+    const consultation = await generateConsultation(question, cachedData);
+
+    res.json({
+      agent_type: "ec2_bedrock_consultation",
+      consultation: consultation,
+      cache_key: cache_key,
+      question: question,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error("상담 처리 오류:", error);
+    res.status(500).json({
+      error: "상담 중 오류가 발생했습니다. 다시 시도해주세요.",
+      details: error.message
+    });
+  }
+});
+
+// Bedrock을 사용한 상담 응답 생성 함수
+async function generateConsultation(question, sajuData) {
+  try {
+    const name = sajuData.data?.name || "고객";
+    const translatedData = sajuData.data?.translatedData;
+    const wuxingAnalysis = sajuData.data?.wuxingAnalysis;
+    
+    const prompt = `당신은 전문 사주명리학 상담사입니다. 다음 사주 정보를 바탕으로 질문에 답변해주세요.
+
+고객명: ${name}
+질문: ${question}
+
+사주 정보:
+- 사주팔자: ${JSON.stringify(translatedData?.사주팔자 || {})}
+- 오행 분석: ${JSON.stringify(wuxingAnalysis || {})}
+- 십신: ${JSON.stringify(translatedData?.십신 || {})}
+
+답변 요구사항:
+1. 전문적이면서도 이해하기 쉽게 설명
+2. 구체적이고 실용적인 조언 제공
+3. 긍정적이고 건설적인 방향으로 안내
+4. 200-300자 내외로 간결하게 작성
+
+답변:`;
+
+    const command = new InvokeModelCommand({
+      modelId: "anthropic.claude-3-haiku-20240307-v1:0",
+      body: JSON.stringify({
+        anthropic_version: "bedrock-2023-05-31",
+        max_tokens: 500,
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ]
+      })
+    });
+
+    const response = await bedrockClient.send(command);
+    const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+    
+    return responseBody.content[0].text;
+
+  } catch (error) {
+    console.error("Bedrock 호출 오류:", error);
+    
+    // Bedrock 실패 시 폴백 응답
+    const name = sajuData.data?.name || "고객";
+    return `${name}님, 현재 AI 상담 서비스에 일시적인 문제가 있습니다. 잠시 후 다시 시도해주시기 바랍니다. 기본적으로 균형잡힌 사주를 가지고 계시니 꾸준한 노력으로 좋은 결과를 얻으실 수 있을 것입니다.`;
+  }
+}
 
 // 헬스 체크
 app.get("/health", (req, res) => {
