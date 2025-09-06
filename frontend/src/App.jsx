@@ -31,7 +31,7 @@ function App() {
       const response = await apiClient.post('/saju/basic', requestData)
 
       setPersonalInfo(info)
-      setSajuData(response.data.data)
+      setSajuData(response.data.saju_analysis)
       setCacheKey(response.data.cache_key)
       setStep(2)
     } catch (error) {

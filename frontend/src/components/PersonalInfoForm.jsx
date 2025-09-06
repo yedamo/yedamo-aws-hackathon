@@ -7,8 +7,7 @@ function PersonalInfoForm({ onSubmit, isLoading }) {
     birthHour: '',
     gender: 'male',
     calendarType: 'solar',
-    timezone: 'korea',
-    maritalStatus: 'single'
+    timezone: 'korea'
   })
 
   const handleSubmit = (e) => {
@@ -108,21 +107,6 @@ function PersonalInfoForm({ onSubmit, isLoading }) {
           >
             <option value="male">남성</option>
             <option value="female">여성</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            결혼 상태
-          </label>
-          <select
-            name="maritalStatus"
-            value={formData.maritalStatus}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-          >
-            <option value="single">미혼</option>
-            <option value="married">기혼</option>
           </select>
         </div>
 
