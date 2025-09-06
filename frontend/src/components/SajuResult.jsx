@@ -146,16 +146,6 @@ function SajuResult({ personalInfo, sajuData, onChatStart }) {
                 className="max-w-full h-auto rounded-lg shadow-lg mx-auto mb-4"
                 style={{ maxHeight: '400px' }}
               />
-              <button
-                onClick={() => {
-                  setIsGenerating(true);
-                  setGeneratedImage(null);
-                  generateImage();
-                }}
-                className="text-sm text-purple-600 hover:text-purple-800 underline"
-              >
-                새로운 이미지 생성
-              </button>
             </div>
           )}
         </div>
