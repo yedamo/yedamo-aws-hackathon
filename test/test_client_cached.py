@@ -134,7 +134,7 @@ if __name__ == "__main__":
         print("API URL이 필요합니다.")
         exit(1)
 
-    test_cached_flow(api_url)
-    # test_cache_expiry(api_url)
-    # cache_key = "1757137772_김다롬"
-    # test_consultation_with_cache(api_url, cache_key)
+    # test_cached_flow(api_url)
+    # # test_cache_expiry(api_url)
+    cache_key = "1757141251_김다롬"
+    test_consultation_with_cache(api_url, cache_key)

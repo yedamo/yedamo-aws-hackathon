@@ -85,7 +85,36 @@ class YedamoStack(Stack):
             description="Allow backend to access Redis"
         )
 
-        # Backend EC2 인스턴스 (Node.js + Bedrock)
+        # Backend EC2 IAM 역할 (Bedrock 권한 포함)
+        backend_role = iam.Role(
+            self, "YedamoBackendRole",
+            assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSSMManagedInstanceCore")
+            ],
+            inline_policies={
+                "BedrockAccess": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            effect=iam.Effect.ALLOW,
+                            actions=[
+                                "bedrock:InvokeModel",
+                                "bedrock:InvokeModelWithResponseStream"
+                            ],
+                            resources=["*"]
+                        )
+                    ]
+                )
+            }
+        )
+
+        # Backend EC2 인스턴스 프로파일
+        backend_instance_profile = iam.InstanceProfile(
+            self, "YedamoBackendInstanceProfile",
+            role=backend_role
+        )
+
+        # Backend EC2 인스턴스 (Node.js + Bedrock + MCP)
         backend_instance = ec2.Instance(
             self, "YedamoBackendInstance",
             instance_type=ec2.InstanceType.of(
@@ -96,6 +125,7 @@ class YedamoStack(Stack):
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
             security_group=backend_security_group,
             key_name="yedamo-key-pair",
+            role=backend_role,
             user_data=ec2.UserData.custom(
                 "#!/bin/bash\n"
                 "yum update -y\n"
@@ -112,7 +142,7 @@ class YedamoStack(Stack):
                 "echo 'export AWS_REGION=us-east-1' >> /home/ec2-user/.bashrc\n"
                 "echo 'export PORT=3001' >> /home/ec2-user/.bashrc\n"
                 
-                # 백엔드 시작 스크립트 생성
+                # 백엔드 시작 스크립트 생성 (MCP 지원)
                 "cat > /home/ec2-user/start-backend.sh << 'EOF'\n"
                 "#!/bin/bash\n"
                 "cd /home/ec2-user/yedamo-aws-hackathon/backend\n"
@@ -128,7 +158,7 @@ class YedamoStack(Stack):
                 "chmod +x /home/ec2-user/start-backend.sh\n"
                 "chown ec2-user:ec2-user /home/ec2-user/start-backend.sh\n"
                 
-                "echo 'Backend setup completed. Run start-backend.sh after git clone.' > /home/ec2-user/backend-ready.txt\n"
+                "echo 'Backend setup completed with Bedrock IAM role. Run start-backend.sh after git clone.' > /home/ec2-user/backend-ready.txt\n"
             )
         )
 
@@ -149,7 +179,7 @@ class YedamoStack(Stack):
             handler="index.handler",
             code=_lambda.Code.from_asset("../lambda"),
             role=lambda_role,
-            timeout=Duration.seconds(30),
+            timeout=Duration.seconds(60),  # API Gateway 504 오류 방지
             memory_size=256,
             environment={
                 "BACKEND_URL": f"http://{backend_instance.instance_public_ip}:3001"
