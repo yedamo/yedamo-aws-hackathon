@@ -41,18 +41,56 @@ def deploy():
     print("\n🌟 스택 배포 중...")
     output = run_command("cdk deploy --require-approval never", cwd=cdk_dir)
 
-    # API URL 추출
-    if "YedamoStack.YedamoApiEndpoint" in output:
-        api_url = output.split("YedamoStack.YedamoApiEndpoint")[
-            1].split("=")[1].strip()
-        print(f"\n✅ 배포 완료!")
-        print(f"📡 API 엔드포인트: {api_url}")
+    # 출력에서 URL 추출
+    api_url = None
+    backend_url = None
+    backend_ip = None
+    
+    for line in output.split('\n'):
+        if "ApiGatewayUrl" in line and "=" in line:
+            api_url = line.split("=")[1].strip()
+        elif "BackendUrl" in line and "=" in line:
+            backend_url = line.split("=")[1].strip()
+        elif "BackendPublicIP" in line and "=" in line:
+            backend_ip = line.split("=")[1].strip()
+    
+    print(f"\n✅ 배포 완료!")
+    if api_url:
+        print(f"📡 API Gateway: {api_url}")
         print(f"🔗 사주 상담 URL: {api_url}saju")
+    
+    if backend_url:
+        print(f"🚀 Backend 서버: {backend_url}")
+        print(f"🔍 Backend Health: {backend_url}/health")
+    
+    if backend_ip:
+        print(f"\n💻 Backend 배포 대기 중... (IP: {backend_ip})")
+        print("🕰️ EC2 인스턴스가 시작되고 Docker 컴포즈가 실행될 때까지 3-5분 소요")
+        
+        # Backend 서버 상태 확인
+        import time
+        import requests
+        
+        print("🔍 Backend 서버 상태 확인 중...")
+        for i in range(30):  # 5분 대기
+            try:
+                response = requests.get(f"http://{backend_ip}:3001/health", timeout=5)
+                if response.status_code == 200:
+                    print(f"✅ Backend 서버 준비 완료! ({i*10}초 소요)")
+                    break
+            except:
+                pass
+            print(f"⏳ Backend 서버 시작 대기 중... ({i*10}/300초)")
+            time.sleep(10)
+        else:
+            print("⚠️ Backend 서버 상태 확인 시간 초과. 수동으로 확인해주세요.")
 
-        # 테스트 예제 출력
-        print("\n📋 테스트 예제:")
+    # 테스트 예제 출력
+    print("\n📋 테스트 예제:")
+    if api_url:
         print(f"""
-curl -X POST {api_url}saju \\
+# API Gateway 테스트
+curl -X POST {api_url}saju/basic \\
   -H "Content-Type: application/json" \\
   -d '{{
     "birth_info": {{
@@ -61,7 +99,20 @@ curl -X POST {api_url}saju \\
       "day": 15,
       "hour": 14
     }},
-    "question": "올해 운세는 어떤가요?"
+    "name": "테스트사용자"
+  }}'
+        """)
+    
+    if backend_url:
+        print(f"""
+# Backend 직접 테스트
+curl -X POST {backend_url}/api/saju \\
+  -H "Content-Type: application/json" \\
+  -d '{{
+    "birthDate": "1990-05-15",
+    "birthTime": "14:00",
+    "gender": "male",
+    "name": "테스트사용자"
   }}'
         """)
 
@@ -70,6 +121,15 @@ def destroy():
     """리소스 삭제 (순서대로)"""
     print("🗑️ 리소스 삭제 중...")
     cdk_dir = os.path.join(os.getcwd(), "cdk")
+    
+    # Backend 서버 중지 (선택사항)
+    try:
+        print("🚀 Backend 서버 중지 시도...")
+        # EC2 인스턴스에서 Docker 컴포즈 중지
+        # 이는 CDK destroy에서 처리되므로 선택사항
+        pass
+    except Exception as e:
+        print(f"⚠️ Backend 서버 중지 실패: {e}")
     
     # CDK 스택 삭제
     print("📋 CDK 스택 삭제 중...")
@@ -236,6 +296,34 @@ def cleanup_resources():
     print("✅ 수동 리소스 정리 완료")
 
 
+def deploy_backend_only():
+    """백엔드만 재배포 (개발용)"""
+    print("🚀 Backend 서버 재배포...")
+    
+    # CDK 출력에서 Backend IP 가져오기
+    cdk_dir = os.path.join(os.getcwd(), "cdk")
+    try:
+        output = run_command("cdk deploy --require-approval never --outputs-file outputs.json", cwd=cdk_dir)
+        
+        # outputs.json에서 IP 추출
+        import json
+        with open(os.path.join(cdk_dir, "outputs.json"), 'r') as f:
+            outputs = json.load(f)
+        
+        backend_ip = outputs.get('YedamoStack', {}).get('BackendPublicIP')
+        if not backend_ip:
+            print("❌ Backend IP를 찾을 수 없습니다.")
+            return
+        
+        print(f"💻 Backend IP: {backend_ip}")
+        print("🕰️ SSH로 연결하여 수동 재배포하세요:")
+        print(f"ssh -i yedamo-key-pair.pem ec2-user@{backend_ip}")
+        print("cd yedamo-aws-hackathon/backend && docker-compose down && docker-compose up -d --build")
+        
+    except Exception as e:
+        print(f"❌ Backend 재배포 실패: {e}")
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         if sys.argv[1] == "destroy":
@@ -244,7 +332,9 @@ if __name__ == "__main__":
             redeploy()
         elif sys.argv[1] == "cleanup":
             cleanup_resources()
+        elif sys.argv[1] == "backend":
+            deploy_backend_only()
         else:
-            print("사용법: python deploy.py [destroy|redeploy|cleanup]")
+            print("사용법: python deploy.py [destroy|redeploy|cleanup|backend]")
     else:
         deploy()

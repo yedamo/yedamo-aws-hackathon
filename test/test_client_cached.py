@@ -41,7 +41,7 @@ def test_cached_flow(api_url):
             cache_key = result['cache_key']
             print(f"✅ 사주 계산 완료! 캐시 키: {cache_key}")
             print(
-                f"📊 사주 분석: {json.dumps(result['saju_analysis'], ensure_ascii=False, indent=2)}")
+                f"📊 사주 분석: {json.dumps(result, ensure_ascii=False, indent=2)}")
 
             # 2단계: 질의응답 (캐시 사용)
             test_consultation_with_cache(api_url, cache_key)

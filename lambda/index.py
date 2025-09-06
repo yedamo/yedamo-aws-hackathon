@@ -1,17 +1,20 @@
 import json
 import os
+import requests
 from supervisor import SupervisorAgent
-from agents.saju_agent import SajuAgent
 
 # 통합 캐시 매니저 사용
 from cache_manager import cache_manager
+
+# Backend API URL
+BACKEND_URL = os.environ.get('BACKEND_URL', 'http://localhost:3001')
 
 
 def handler(event, context):
     # 환경변수 로깅
     print(f"REDIS_HOST: {os.environ.get('REDIS_HOST', 'NOT_SET')}")
     print(f"REDIS_PORT: {os.environ.get('REDIS_PORT', 'NOT_SET')}")
-    
+
     try:
         path = event.get('path', '')
         body = json.loads(event['body'])
@@ -38,38 +41,62 @@ def handler(event, context):
 
 
 def handle_basic_saju(body):
-    """기본 사주 정보 반환 API"""
+    """기본 사주 정보 반환 API - Backend 서버 호출"""
     birth_info = validate_birth_info(body)
     name = body.get('name', '')
 
     if not name:
         raise ValueError('name이 필요합니다')
 
-    # 캐시 키 생성
-    cache_key = cache_manager.generate_cache_key(name)
+    # Backend API 호출
+    try:
+        # birth_info를 backend 형식으로 변환
+        backend_payload = {
+            'birthDate': f"{birth_info['year']}-{birth_info['month']:02d}-{birth_info['day']:02d}",
+            'birthTime': f"{birth_info['hour']:02d}:00",
+            'isLunar': birth_info.get('isLunar', False),
+            'gender': birth_info.get('gender', 'male'),
+            'name': name
+        }
 
-    # 사주 데이터 계산
-    saju_agent = SajuAgent()
-    saju_data = saju_agent.get_bazi_info(birth_info)
+        response = requests.post(
+            f"{BACKEND_URL}/saju/basic",
+            json=backend_payload,
+            timeout=30
+        )
 
-    # 캐시 저장
-    cache_manager.set_cache(cache_key, {
-        'birth_info': birth_info,
-        'saju_analysis': saju_data
-    })
+        if response.status_code == 200:
+            backend_data = response.json()
 
-    return {
-        'statusCode': 200,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        },
-        'body': json.dumps({
-            'cache_key': cache_key,
-            'birth_info': birth_info,
-            'saju_analysis': saju_data
-        }, ensure_ascii=False)
-    }
+            # 캐시에 저장 (backend에서 받은 cacheKey 사용)
+            cache_key = backend_data.get('cacheKey')
+            if cache_key:
+                cache_manager.set_cache(cache_key, {
+                    'birth_info': birth_info,
+                    'saju_analysis': backend_data.get('data', {})
+                })
+
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({
+                    'cache_key': cache_key,
+                    'birth_info': birth_info,
+                    'saju_analysis': backend_data.get('data', {}),
+                    'backend_response': backend_data
+                }, ensure_ascii=False)
+            }
+        else:
+            raise Exception(
+                f"Backend API 오류: {response.status_code} - {response.text}")
+
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Backend 서버 연결 실패: {str(e)}")
+    except Exception as e:
+        raise Exception(f"사주 데이터 처리 실패: {str(e)}")
 
 
 def handle_consultation(body):
@@ -133,7 +160,8 @@ def validate_birth_info(body):
 
     # 선택 필드 기본값 설정
     birth_info.setdefault('gender', 'male')
-    birth_info.setdefault('timezone', 'Asia/Shanghai')
+    birth_info.setdefault('timezone', 'Asia/Seoul')
+    birth_info.setdefault('isLunar', False)
 
     return birth_info
 

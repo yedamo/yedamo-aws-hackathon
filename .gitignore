@@ -54,6 +54,7 @@ logs/
 # ec2 redis-cli 용
 yedamo-key-pair.pem
 etc/
+test/test_url
 
 # Frontend specific
 frontend/dist/

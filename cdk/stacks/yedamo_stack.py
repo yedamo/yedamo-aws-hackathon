@@ -80,6 +80,64 @@ class YedamoStack(Stack):
         # 의존성 명시적 설정
         redis_cluster.add_dependency(cache_subnet_group)
 
+        # Saju Backend EC2 보안 그룹
+        backend_security_group = ec2.SecurityGroup(
+            self, "YedamoBackendSecurityGroup",
+            vpc=vpc,
+            description="Security group for Saju Backend EC2"
+        )
+
+        # HTTP 접근 허용
+        backend_security_group.add_ingress_rule(
+            peer=ec2.Peer.any_ipv4(),
+            connection=ec2.Port.tcp(3001),
+            description="HTTP access to backend"
+        )
+
+        # SSH 접근 허용
+        backend_security_group.add_ingress_rule(
+            peer=ec2.Peer.any_ipv4(),
+            connection=ec2.Port.tcp(22),
+            description="SSH access"
+        )
+
+        # Backend에서 ElastiCache 접근 허용
+        cache_security_group.add_ingress_rule(
+            peer=backend_security_group,
+            connection=ec2.Port.tcp(6379),
+            description="Allow backend to access Redis"
+        )
+
+        # Saju Backend EC2 인스턴스
+        backend_instance = ec2.Instance(
+            self, "YedamoBackendInstance",
+            instance_type=ec2.InstanceType.of(
+                ec2.InstanceClass.T3, ec2.InstanceSize.SMALL),
+            machine_image=ec2.AmazonLinuxImage(
+                generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2),
+            vpc=vpc,
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
+            security_group=backend_security_group,
+            key_name="yedamo-key-pair",
+            user_data=ec2.UserData.custom(
+                "#!/bin/bash\n"
+                "yum update -y\n"
+                "yum install -y docker git aws-cli\n"
+                "systemctl start docker\n"
+                "systemctl enable docker\n"
+                "usermod -a -G docker ec2-user\n"
+                "curl -L \"https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose\n"
+                "chmod +x /usr/local/bin/docker-compose\n"
+                "ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose\n"
+                f"echo 'REDIS_HOST={redis_cluster.attr_redis_endpoint_address}' > /home/ec2-user/.env\n"
+                "echo 'REDIS_PORT=6379' >> /home/ec2-user/.env\n"
+                "cd /home/ec2-user\n"
+                "mkdir -p yedamo-aws-hackathon/backend\n"
+                "chown -R ec2-user:ec2-user yedamo-aws-hackathon\n"
+                "echo 'Backend directory created' > /home/ec2-user/backend-ready.txt\n"
+            )
+        )
+
         # Lambda 실행 역할
         lambda_role = iam.Role(
             self, "YedamoLambdaRole",
@@ -103,25 +161,12 @@ class YedamoStack(Stack):
             }
         )
 
-        # Lambda 함수 (멀티에이전트 + 캐시 지원 + Node.js)
+        # Lambda 함수 (멀티에이전트 + 캐시 지원)
         saju_lambda = _lambda.Function(
             self, "SajuLambda",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="index.handler",
-            code=_lambda.Code.from_asset(
-                "../lambda",
-                bundling=BundlingOptions(
-                    image=_lambda.Runtime.PYTHON_3_11.bundling_image,
-                    command=[
-                        "bash", "-c",
-                        "curl -fsSL https://rpm.nodesource.com/setup_18.x | bash - && "
-                        "yum install -y nodejs && "
-                        "pip install -r requirements.txt -t /asset-output && "
-                        "cp -au . /asset-output"
-                    ],
-                    user="root"
-                )
-            ),
+            code=_lambda.Code.from_asset("../lambda"),
             role=lambda_role,
             timeout=Duration.seconds(60),
             memory_size=512,
@@ -136,8 +181,7 @@ class YedamoStack(Stack):
                 "REDIS_PORT": "6379",
                 "CACHE_TTL": "1800",  # 30분
                 "CACHE_REFRESH_THRESHOLD": "300",  # 5분
-                "PATH": "/var/lang/bin:/usr/local/bin:/usr/bin/:/bin:/opt/bin:/var/runtime:/usr/local/sbin:/usr/sbin:/sbin",
-                "NODE_PATH": "/usr/lib/node_modules"
+                "BACKEND_URL": f"http://{backend_instance.instance_public_ip}:3001"
             }
         )
 
@@ -155,15 +199,31 @@ class YedamoStack(Stack):
 
         # API 리소스 및 메서드
         saju_resource = api.root.add_resource("saju")
-        saju_integration = apigw.LambdaIntegration(saju_lambda)
+        
+        # Lambda 통합 (멀티에이전트)
+        lambda_integration = apigw.LambdaIntegration(saju_lambda)
+        
+        # EC2 HTTP 통합 (캐시 기반 - basic만)
+        ec2_integration = apigw.HttpIntegration(
+            f"http://{backend_instance.instance_public_ip}:3001/saju/basic",
+            http_method="POST"
+        )
 
-        # 기본 사주 API
+        # EC2 경로: /saju/basic (캐시 기반)
         basic_resource = saju_resource.add_resource("basic")
-        basic_resource.add_method("POST", saju_integration)
+        basic_resource.add_method("POST", ec2_integration)
 
-        # 질의응답 API
+        # Lambda 경로: /saju/consultation (멀티에이전트)
         consultation_resource = saju_resource.add_resource("consultation")
-        consultation_resource.add_method("POST", saju_integration)
+        consultation_resource.add_method("POST", lambda_integration)
+
+        # Lambda 경로: /saju/ai/* (멀티에이전트 - 추가 기능)
+        ai_resource = saju_resource.add_resource("ai")
+        ai_basic_resource = ai_resource.add_resource("basic")
+        ai_basic_resource.add_method("POST", lambda_integration)
+        
+        ai_consultation_resource = ai_resource.add_resource("consultation")
+        ai_consultation_resource.add_method("POST", lambda_integration)
 
         # ElastiCache CLI용 베스천 호스트
         bastion_security_group = ec2.SecurityGroup(
@@ -186,7 +246,7 @@ class YedamoStack(Stack):
             description="Allow bastion to access Redis"
         )
 
-        # 베스천 호스트 인스턴스
+        # 베스천 호스트 인스턴스 (Redis CLI용)
         bastion_host = ec2.Instance(
             self, "YedamoBastionHost",
             instance_type=ec2.InstanceType.of(
@@ -208,11 +268,17 @@ class YedamoStack(Stack):
         # 출력
         self.api_url = api.url
         self.redis_endpoint = redis_cluster.attr_redis_endpoint_address
+        self.backend_public_ip = backend_instance.instance_public_ip
         self.bastion_public_ip = bastion_host.instance_public_ip
 
         # 환경변수 확인용 출력
         from aws_cdk import CfnOutput
+        CfnOutput(self, "ApiGatewayUrl", value=api.url)
         CfnOutput(self, "RedisHost",
                   value=redis_cluster.attr_redis_endpoint_address)
-        CfnOutput(self, "LambdaEnvVars",
-                  value=f"REDIS_HOST={redis_cluster.attr_redis_endpoint_address}")
+        CfnOutput(self, "BackendUrl",
+                  value=f"http://{backend_instance.instance_public_ip}:3001")
+        CfnOutput(self, "BackendPublicIP",
+                  value=backend_instance.instance_public_ip)
+        CfnOutput(self, "BastionPublicIP",
+                  value=bastion_host.instance_public_ip)
