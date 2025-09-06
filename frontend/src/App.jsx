@@ -16,14 +16,6 @@ function App() {
     try {
       const birthDate = new Date(info.birthDate)
       
-      const timezoneMap = {
-        korea: 'Asia/Seoul',
-        usa_east: 'America/New_York',
-        usa_west: 'America/Los_Angeles',
-        china: 'Asia/Shanghai',
-        japan: 'Asia/Tokyo'
-      }
-      
       const requestData = {
         name: info.name,
         birth_info: {
@@ -32,14 +24,14 @@ function App() {
           day: birthDate.getDate(),
           hour: parseInt(info.birthHour),
           gender: info.gender,
-          timezone: timezoneMap[info.timezone]
+          region: info.timezone === 'korea' ? 'korea' : 'other'
         }
       }
 
       const response = await apiClient.post('/saju/basic', requestData)
 
       setPersonalInfo(info)
-      setSajuData(response.data.saju_analysis)
+      setSajuData(response.data.data)
       setCacheKey(response.data.cache_key)
       setStep(2)
     } catch (error) {
