@@ -100,8 +100,9 @@ def handle_basic_saju(body):
 
 
 def handle_consultation(body):
-    """질의응답 API - Backend 서버 호출"""
+    """질의응답 API - Supervisor 사용"""
     cache_key = body.get('cache_key', '')
+    basic_info = body.get('basic_info', {})
     question = body.get('question', '')
 
     if not cache_key:
@@ -109,36 +110,29 @@ def handle_consultation(body):
     if not question:
         raise ValueError('질문이 필요합니다')
 
-    # Backend API 호출
+    # Supervisor 사용
     try:
-        backend_payload = {
-            'cache_key': cache_key,
-            'question': question
+        supervisor = SupervisorAgent()
+        result = supervisor.route_request(basic_info, question, cache_key)
+        
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps(result, ensure_ascii=False)
         }
 
-        response = requests.post(
-            f"{BACKEND_URL}/saju/consultation",
-            json=backend_payload,
-            timeout=30
-        )
-
-        if response.status_code == 200:
-            backend_data = response.json()
-            return {
-                'statusCode': 200,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                'body': json.dumps(backend_data, ensure_ascii=False)
-            }
-        else:
-            raise Exception(f"Backend API 오류: {response.status_code} - {response.text}")
-
-    except requests.exceptions.RequestException as e:
-        raise Exception(f"Backend 서버 연결 실패: {str(e)}")
     except Exception as e:
-        raise Exception(f"상담 데이터 처리 실패: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({'error': str(e)}, ensure_ascii=False)
+        }
 
 
 def validate_birth_info(body):
