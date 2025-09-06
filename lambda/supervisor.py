@@ -42,11 +42,11 @@ class SupervisorAgent:
         self.context = UserContext()
         self.cache = CacheManager()
 
-    def route_request(self, birth_info, question, cache_key=None):
+    def route_request(self, cache_key, question, birth_info=None):
         """통합 멀티에이전트 처리"""
         try:
             # 컨텍스트 설정
-            self.context.birth_info = birth_info
+            self.context.birth_info = birth_info or {}
             self.context.question = question
 
             # 1. 지능형 질문 분석
@@ -55,14 +55,17 @@ class SupervisorAgent:
             self.context.analysis_result = analysis_result
 
             # 2. 캐시에서 사주 데이터 조회
-            if not cache_key:
-                name = birth_info.get('name', 'unknown')
-                cache_key = self.cache.generate_cache_key(name)
-            saju_basic, needs_refresh = self.cache.get_cache(cache_key)
-            if not saju_basic:
-                saju_basic = {"basic": "saju_data", "birth_info": birth_info}
-                self.cache.set_cache(cache_key, saju_basic)
-            self.context.bazi_data = saju_basic
+            bazi_data, needs_refresh = self.cache.get_cache(cache_key)
+            if not bazi_data:
+                return {
+                    "error": "캐시에서 사주 데이터를 찾을 수 없습니다",
+                    "cache_key": cache_key
+                }
+            
+            # 캐시에서 가져온 데이터로 birth_info 설정
+            cached_birth_info = bazi_data.get('birth_info', {})
+            self.context.birth_info = cached_birth_info
+            self.context.bazi_data = bazi_data
 
             # 3. RAG 지식베이스 활용 해석
             knowledge_interpretation = self.agents[AgentType.KNOWLEDGE_AGENT].get_bazi_interpretation(

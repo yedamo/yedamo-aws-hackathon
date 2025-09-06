@@ -9,7 +9,9 @@ class CacheManager:
         self.redis_client = redis.Redis(
             host=os.environ.get('REDIS_HOST', 'localhost'),
             port=int(os.environ.get('REDIS_PORT', '6379')),
-            decode_responses=True
+            decode_responses=True,
+            socket_timeout=5,
+            socket_connect_timeout=5
         )
         self.TTL = 30 * 60  # 30분
         self.REFRESH_THRESHOLD = 5 * 60  # 5분

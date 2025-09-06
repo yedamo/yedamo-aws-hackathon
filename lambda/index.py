@@ -102,7 +102,6 @@ def handle_basic_saju(body):
 def handle_consultation(body):
     """질의응답 API - Supervisor 사용"""
     cache_key = body.get('cache_key', '')
-    basic_info = body.get('basic_info', {})
     question = body.get('question', '')
 
     if not cache_key:
@@ -110,10 +109,10 @@ def handle_consultation(body):
     if not question:
         raise ValueError('질문이 필요합니다')
 
-    # Supervisor 사용
+    # Supervisor 사용 - cache_key만으로 처리
     try:
         supervisor = SupervisorAgent()
-        result = supervisor.route_request(basic_info, question, cache_key)
+        result = supervisor.route_request(cache_key, question)
         
         return {
             'statusCode': 200,

@@ -161,6 +161,22 @@ class YedamoStack(Stack):
             }
         )
 
+        # Bedrock VPC Endpoint (Lambda에서 Bedrock 접근용)
+        bedrock_endpoint = ec2.VpcEndpoint(
+            self, "BedrockVpcEndpoint",
+            vpc=vpc,
+            service=ec2.VpcEndpointService(
+                name="com.amazonaws.us-east-1.bedrock-runtime",
+                port=443
+            ),
+            vpc_endpoint_type=ec2.VpcEndpointType.INTERFACE,
+            subnets=ec2.SubnetSelection(
+                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+            ),
+            security_groups=[cache_security_group],
+            private_dns_enabled=True
+        )
+
         # Lambda 함수 (멀티에이전트 + 캐시 지원)
         saju_lambda = _lambda.Function(
             self, "SajuLambda",
@@ -173,7 +189,7 @@ class YedamoStack(Stack):
             vpc=vpc,
             vpc_subnets=ec2.SubnetSelection(
                 subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            security_groups=[lambda_security_group],
+            security_groups=[cache_security_group],
             environment={
                 "MODEL_ID": "anthropic.claude-3-haiku-20240307-v1:0",
                 "SUPERVISOR_ENABLED": "true",
