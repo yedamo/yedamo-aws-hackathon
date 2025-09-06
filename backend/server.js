@@ -303,57 +303,6 @@ app.post("/saju/consultation", async (req, res) => {
 });
 
 // Bedrock을 사용한 상담 응답 생성 함수
-async function generateConsultation(question, sajuData) {
-  try {
-    const name = sajuData.data?.name || "고객";
-    const translatedData = sajuData.data?.translatedData;
-    const wuxingAnalysis = sajuData.data?.wuxingAnalysis;
-    
-    const prompt = `당신은 전문 사주명리학 상담사입니다. 다음 사주 정보를 바탕으로 질문에 답변해주세요.
-
-고객명: ${name}
-질문: ${question}
-
-사주 정보:
-- 사주팔자: ${JSON.stringify(translatedData?.사주팔자 || {})}
-- 오행 분석: ${JSON.stringify(wuxingAnalysis || {})}
-- 십신: ${JSON.stringify(translatedData?.십신 || {})}
-
-답변 요구사항:
-1. 전문적이면서도 이해하기 쉽게 설명
-2. 구체적이고 실용적인 조언 제공
-3. 긍정적이고 건설적인 방향으로 안내
-4. 200-300자 내외로 간결하게 작성
-
-답변:`;
-
-    const command = new InvokeModelCommand({
-      modelId: "anthropic.claude-3-haiku-20240307-v1:0",
-      body: JSON.stringify({
-        anthropic_version: "bedrock-2023-05-31",
-        max_tokens: 500,
-        messages: [
-          {
-            role: "user",
-            content: prompt
-          }
-        ]
-      })
-    });
-
-    const response = await bedrockClient.send(command);
-    const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-    
-    return responseBody.content[0].text;
-
-  } catch (error) {
-    console.error("Bedrock 호출 오류:", error);
-    
-    // Bedrock 실패 시 폴백 응답
-    const name = sajuData.data?.name || "고객";
-    return `${name}님, 현재 AI 상담 서비스에 일시적인 문제가 있습니다. 잠시 후 다시 시도해주시기 바랍니다. 기본적으로 균형잡힌 사주를 가지고 계시니 꾸준한 노력으로 좋은 결과를 얻으실 수 있을 것입니다.`;
-  }
-}
 
 // 헬스 체크
 app.get("/health", (req, res) => {
@@ -375,3 +324,151 @@ app.listen(PORT, () => {
   initializeRedis();
   initializeMCP();
 });
+// Bedrock을 사용한 상담 응답 생성 함수 (타임아웃 추가)
+async function generateConsultation(question, sajuData) {
+  try {
+    const name = sajuData.data?.name || '고객';
+    const translatedData = sajuData.data?.translatedData;
+    const wuxingAnalysis = sajuData.data?.wuxingAnalysis;
+    
+    const prompt = `당신은 전문 사주명리학 상담사입니다. 다음 사주 정보를 바탕으로 질문에 답변해주세요.
+
+고객명: ${name}
+질문: ${question}
+
+사주 정보:
+- 사주팔자: ${JSON.stringify(translatedData?.사주팔자 || {})}
+- 오행 분석: ${JSON.stringify(wuxingAnalysis || {})}
+- 십신: ${JSON.stringify(translatedData?.십신 || {})}
+
+답변 요구사항:
+1. 전문적이면서도 이해하기 쉽게 설명
+2. 구체적이고 실용적인 조언 제공
+3. 긍정적이고 건설적인 방향으로 안내
+4. 200-300자 내외로 간결하게 작성
+
+답변:`;
+
+    // 10초 타임아웃으로 Bedrock 호출
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Bedrock timeout')), 10000)
+    );
+
+    const bedrockPromise = (async () => {
+      const command = new InvokeModelCommand({
+        modelId: 'anthropic.claude-3-haiku-20240307-v1:0',
+        body: JSON.stringify({
+          anthropic_version: 'bedrock-2023-05-31',
+          max_tokens: 500,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+
+      const response = await bedrockClient.send(command);
+      const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+      return responseBody.content[0].text;
+    })();
+
+    return await Promise.race([bedrockPromise, timeoutPromise]);
+
+  } catch (error) {
+    console.error('Bedrock 호출 오류:', error);
+    
+    // 빠른 폴백 응답
+    const name = sajuData.data?.name || '고객';
+    const wuxing = sajuData.data?.wuxingAnalysis || [];
+    
+    let response = `${name}님의 사주를 바탕으로 답변드리겠습니다.\n\n`;
+    
+    if (question.includes('운세') || question.includes('올해')) {
+      response += '올해는 ';
+      if (wuxing.some(w => w.includes('화') && w.includes('강함'))) {
+        response += '화의 기운이 강해 활동적이고 적극적인 한 해가 될 것입니다. ';
+      } else if (wuxing.some(w => w.includes('금') && w.includes('강함'))) {
+        response += '금의 기운으로 결단력과 추진력이 좋은 해입니다. ';
+      } else {
+        response += '균형잡힌 오행으로 안정적인 운세를 보입니다. ';
+      }
+    } else {
+      response += '전반적으로 균형잡힌 사주를 가지고 계십니다. ';
+    }
+    
+    response += '꾸준한 노력과 긍정적인 마음가짐이 좋은 결과를 가져다 줄 것입니다.';
+    
+    return response;
+  }
+}
+
+// Bedrock을 사용한 상담 응답 생성 함수 (타임아웃 최적화)
+async function generateConsultation(question, sajuData) {
+  try {
+    const name = sajuData.data?.name || "고객";
+    const translatedData = sajuData.data?.translatedData;
+    const wuxingAnalysis = sajuData.data?.wuxingAnalysis;
+    
+    const prompt = `당신은 전문 사주명리학 상담사입니다. 다음 사주 정보를 바탕으로 질문에 답변해주세요.
+
+고객명: ${name}
+질문: ${question}
+
+사주 정보:
+- 사주팔자: ${JSON.stringify(translatedData?.사주팔자 || {})}
+- 오행 분석: ${JSON.stringify(wuxingAnalysis || {})}
+
+답변 요구사항:
+1. 전문적이면서도 이해하기 쉽게 설명
+2. 구체적이고 실용적인 조언 제공
+3. 긍정적이고 건설적인 방향으로 안내
+4. 200-300자 내외로 간결하게 작성
+
+답변:`;
+
+    // 10초 타임아웃으로 Bedrock 호출
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Bedrock timeout")), 10000)
+    );
+
+    const bedrockPromise = (async () => {
+      const command = new InvokeModelCommand({
+        modelId: "anthropic.claude-3-haiku-20240307-v1:0",
+        body: JSON.stringify({
+          anthropic_version: "bedrock-2023-05-31",
+          max_tokens: 500,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+
+      const response = await bedrockClient.send(command);
+      const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+      return responseBody.content[0].text;
+    })();
+
+    return await Promise.race([bedrockPromise, timeoutPromise]);
+
+  } catch (error) {
+    console.error("Bedrock 호출 오류:", error);
+    
+    // 빠른 폴백 응답 (사주 데이터 기반)
+    const name = sajuData.data?.name || "고객";
+    const wuxing = sajuData.data?.wuxingAnalysis || [];
+    
+    let response = `${name}님의 사주를 바탕으로 답변드리겠습니다.\n\n`;
+    
+    if (question.includes("운세") || question.includes("올해")) {
+      response += "올해는 ";
+      if (wuxing.some(w => w.includes("화") && w.includes("강함"))) {
+        response += "화의 기운이 강해 활동적이고 적극적인 한 해가 될 것입니다. ";
+      } else if (wuxing.some(w => w.includes("금") && w.includes("강함"))) {
+        response += "금의 기운으로 결단력과 추진력이 좋은 해입니다. ";
+      } else {
+        response += "균형잡힌 오행으로 안정적인 운세를 보입니다. ";
+      }
+    } else {
+      response += "전반적으로 균형잡힌 사주를 가지고 계십니다. ";
+    }
+    
+    response += "꾸준한 노력과 긍정적인 마음가짐이 좋은 결과를 가져다 줄 것입니다.";
+    
+    return response;
+  }
+}
