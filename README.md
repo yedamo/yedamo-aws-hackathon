@@ -1,146 +1,211 @@
-# 예다모 : AI 사주 상담사
+# 🔮 예다모 (YEDAMO) - AI 사주 상담사
 
-## 어플리케이션 개요
+> **전통 사주명리학 × AI 기술 = 개인 맞춤형 운세 상담 서비스**
 
-**AI 사주 상담사**는 전통 사주명리학과 AI 기술을 결합하여 개인 맞춤형 운세 상담을 제공하는 서비스입니다. 사용자의 생년월일, 출생시간 등 기본 정보와 구체적인 질문을 입력받아 사주팔자, 대운, 세운을 종합 분석하여 신뢰할 수 있는 조언을 제공합니다.
+[![AWS](https://img.shields.io/badge/AWS-FF9900?style=flat&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
+[![React](https://img.shields.io/badge/React-61DAFB?style=flat&logo=react&logoColor=black)](https://reactjs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)](https://python.org/)
+[![Bedrock](https://img.shields.io/badge/Amazon_Bedrock-FF9900?style=flat&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/bedrock/)
 
-기존의 단순한 운세 서비스와 달리, 동양철학의 깊이 있는 이론을 바탕으로 하면서도 일반인이 쉽게 이해할 수 있도록 정제된 해석을 제공하는 것이 특징입니다. 복잡한 만세력 해석 과정을 AI가 대신 처리하여 누구나 쉽게 전문적인 사주 상담을 받을 수 있습니다.
+## 📖 프로젝트 개요
 
-## 주요 기능
+**예다모(YEDAMO)**는 전통 사주명리학과 최신 AI 기술을 결합한 혁신적인 운세 상담 플랫폼입니다. 복잡한 만세력 계산과 사주 해석을 AI가 자동화하여, 누구나 쉽게 전문적인 사주 상담을 받을 수 있습니다.
 
-### 1. 개인정보 입력 및 사주 계산
-- 생년월일, 출생시간, 양력/음력, 성별, 이름 입력
-- 자동 사주팔자 계산 및 대운/세운 분석
-- 음양오행, 십신, 12운성 등 전문 데이터 활용
+### ✨ 핵심 특징
+- 🤖 **멀티에이전트 시스템**: 전문 영역별 AI 에이전트가 협업
+- 🔧 **MCP 지원**: Model Context Protocol로 정밀한 사주 계산
+- 🎨 **AI 이미지 생성**: 12지신 동물 캐릭터 자동 생성
+- ⚡ **실시간 상담**: 대화형 인터페이스로 즉시 응답
+- 🌐 **풀스택 서비스**: React 프론트엔드 + Node.js 백엔드 + AWS 인프라
 
-### 2. 대화형 질문 상담
-- 구체적인 고민이나 질문 입력
-- 사주 분석 결과와 연계한 맞춤형 조언 제공
-- 추가 질문을 통한 심화 상담 가능
+## 🏗️ 시스템 아키텍처
 
-### 3. 종합 운세 분석
-- **사주팔자**: 기본 성격과 타고난 운명 분석
-- **대운**: 10년 단위 인생 흐름 예측
-- **세운**: 올해와 내년의 운세 전망
-- 월운 및 일운까지 세밀한 분석 제공
+![alt text](achi.png)
 
-### 4. 이해하기 쉬운 해석
-- 전문 용어를 일반인도 이해할 수 있게 설명
-- 구체적이고 실용적인 조언 제공
-- 복잡한 명리학 이론을 간단명료하게 정리
+## 🚀 주요 기능
 
-## 동영상 데모
+### 1. 🎯 정밀 사주 분석
+- **사주팔자 계산**: 생년월일시 기반 정확한 사주 도출
+- **대운/세운 분석**: 10년 단위 인생 흐름과 연간 운세
+- **오행 분석**: 음양오행, 십신, 12운성 종합 해석
 
-Amazon Q Developer로 구현한 어플리케이션의 데모 영상을 입력합니다.
-**Git의 Readme에는 GIF 형식으로 업로드하며, 원본 동영상은 발표 Presentation에 제출합니다.**
+### 2. 🤖 지능형 상담 시스템
+- **질문 자동 분류**: AI가 질문 유형을 자동 판별
+- **맞춤형 응답**: 개인 사주에 맞는 구체적 조언
+- **대화형 인터페이스**: 추가 질문으로 심화 상담
 
-## 리소스 배포하기
+### 3. 🎨 AI 이미지 생성
+- **12지신 캐릭터**: 개인 띠에 맞는 동물 캐릭터
+- **색상 커스터마이징**: 오행에 따른 개인 맞춤 색상
+- **Bedrock Nova Canvas**: 고품질 AI 이미지 생성
 
-### 아키텍처
-```
-사용자 → API Gateway → Lambda (Supervisor) → 멀티에이전트
-                                          ├── SajuAgent (사주팔자 + MCP)
-                                          ├── FortuneAgent (운세예측)  
-                                          ├── CompatibilityAgent (궁합)
-                                          ├── QuestionAnalyzer (질문분석)
-                                          ├── ResponseGenerator (응답생성)
-                                          └── KnowledgeAgent (RAG)
-                                          ↓
-                                      Amazon Bedrock
-```
+### 4. ⚡ 고성능 인프라
+- **Redis 캐싱**: 빠른 응답을 위한 결과 캐싱
+- **멀티에이전트**: 전문 영역별 병렬 처리
+- **Auto Scaling**: AWS 서버리스 자동 확장
 
-### 배포 방법
+## 🛠️ 기술 스택
 
-**1. 사전 요구사항**
-- AWS CLI 설치 및 구성
-- Python 3.11+
-- AWS CDK 설치: `npm install -g aws-cdk`
+### Frontend
+- **React 18** - 모던 UI 프레임워크
+- **Vite** - 빠른 개발 환경
+- **Tailwind CSS** - 유틸리티 기반 스타일링
+- **Axios** - HTTP 클라이언트
 
-**2. 배포 실행**
+### Backend
+- **Node.js** - 서버 런타임
+- **Express** - 웹 프레임워크
+- **Redis** - 인메모리 캐싱
+- **MCP SDK** - Model Context Protocol
+
+### AWS Infrastructure
+- **Lambda** - 서버리스 컴퓨팅
+- **API Gateway** - REST API 관리
+- **Bedrock** - AI 모델 서비스
+- **ElastiCache** - 관리형 Redis
+- **CloudWatch** - 모니터링 및 로깅
+
+### AI & ML
+- **Claude-3-Haiku** - 자연어 처리
+- **Nova Canvas** - 이미지 생성
+- **MCP Protocol** - 정밀 사주 계산
+
+## 📦 설치 및 실행
+
+### 사전 요구사항
 ```bash
-# 배포
-python deploy.py
+# Node.js 18+ 설치 확인
+node --version
 
-# 리소스 삭제
-python deploy.py destroy
+# Python 3.11+ 설치 확인
+python --version
+
+# AWS CLI 설치 및 구성
+aws configure
 ```
 
-**3. 테스트**
+### 로컬 개발 환경
 ```bash
-# 테스트 클라이언트 실행
-python test_client.py
+# 1. 저장소 클론
+git clone https://github.com/your-username/yedamo-aws-hackathon.git
+cd yedamo-aws-hackathon
+
+# 2. 프론트엔드 실행
+cd frontend
+yarn install
+yarn dev
+
+# 3. 백엔드 실행 (새 터미널)
+cd backend
+yarn install
+yarn dev
+
+# 4. Redis 실행 (Docker)
+docker run -d -p 6379:6379 redis:alpine
 ```
 
-### 배포되는 AWS 리소스
-- **API Gateway**: REST API 엔드포인트
-- **Lambda Function**: 멀티에이전트 Supervisor 시스템
-  - SajuAgent: 사주팔자 계산 (MCP 지원)
-  - FortuneAgent: 운세 예측 (대운/세운)
-  - CompatibilityAgent: 궁합 분석
-  - QuestionAnalyzer: 질문 분류 및 분석
-  - ResponseGenerator: 통합 응답 생성
-  - KnowledgeAgent: 명리학 지식베이스
-- **IAM Role**: Lambda 실행 권한 (Bedrock 접근 포함)
-- **CloudWatch Logs**: 로그 저장
-
-### API 사용법
-
-**기본 형식:**
+### AWS 배포
 ```bash
-curl -X POST https://your-api-url/saju \
+# 1. CDK 설치
+npm install -g aws-cdk
+
+# 2. Python 의존성 설치
+cd cdk
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# 3. CDK 배포
+cdk bootstrap
+cdk deploy
+
+# 4. 이미지 생성 서비스 배포
+./deploy-image-service.sh
+```
+
+## 🔧 API 사용법
+
+### 기본 사주 분석
+```bash
+curl -X POST https://your-api-url/saju/basic \
   -H "Content-Type: application/json" \
   -d '{
+    "name": "김다롬",
     "birth_info": {
-      "year": 1990,
+      "year": 1997,
       "month": 5,
-      "day": 15,
-      "hour": 14
-    },
-    "question": "올해 운세는 어떤가요?"
+      "day": 19,
+      "hour": 12,
+      "gender": "female",
+      "region": "korea"
+    }
   }'
 ```
 
-**MCP 지원 형식:**
+### 상담 질문
 ```bash
-curl -X POST https://your-api-url/saju \
+curl -X POST https://your-api-url/saju/consultation \
   -H "Content-Type: application/json" \
   -d '{
-    "birth_info": {
-      "birth_date": "1990-05-15",
-      "birth_time": "14:00",
-      "calendar": "solar",
-      "gender": "male"
-    },
-    "question": "내 사주팔자를 분석해주세요"
+    "cache_key": "user_cache_key",
+    "question": "올해 연애운은 어떤가요?"
   }'
 ```
 
-## 멀티에이전트 시스템 특징
+### 이미지 생성
+```bash
+curl -X POST https://your-api-url/image \
+  -H "Content-Type: application/json" \
+  -d '{
+    "color": "빨간",
+    "animal": "용"
+  }'
+```
 
-### 지능형 라우팅
-- **QuestionAnalyzer**: 사용자 질문을 자동 분류
-- **Supervisor**: 적절한 전문 에이전트로 라우팅
-- **통합 응답**: 여러 에이전트 결과를 종합
+## 🧪 테스트
 
-### MCP (Model Context Protocol) 지원
-- **정밀 사주 계산**: @mymcp-fun/bazi 활용
-- **폴백 메커니즘**: MCP 실패 시 기본 계산
+### 단위 테스트
+```bash
+# 백엔드 테스트
+cd backend
+npm test
 
-### RAG 기반 지식베이스
-- **KnowledgeAgent**: 명리학 전문 지식 활용
-- **오행 상극**: 전통 이론 기반 해석
+# 프론트엔드 테스트
+cd frontend
+npm test
+```
 
-## 테스트 케이스
+### API 테스트
+```bash
+# 사주 분석 테스트
+python test/test_client_new.py
 
-1. **사주팔자 분석**: "내 사주팔자를 분석해주세요"
-2. **운세 예측**: "올해와 내년 운세는 어떤가요?"
-3. **궁합 분석**: "연애운과 결혼 적기가 언제인가요?"
-4. **직업 상담**: "이직을 고려 중인데 언제가 좋을까요?"
-5. **건강 운세**: "건강에 주의할 점이 있나요?"
+# 이미지 생성 테스트
+python test_image_api.py
+```
 
-## 기대 효과
+## 📊 성능 최적화
 
-- **전문성**: 각 영역별 전문 에이전트로 정확한 상담
-- **효율성**: 질문 자동 분류로 빠른 응답
-- **확장성**: 새로운 에이전트 추가 용이
-- **신뢰성**: MCP와 RAG로 정확한 명리학 이론 적용
+### 캐싱 전략
+- **Redis 캐싱**: 사주 계산 결과 24시간 캐싱
+- **API 응답 캐싱**: 동일 요청 즉시 응답
+- **이미지 캐싱**: 생성된 이미지 S3 저장
+
+### 확장성
+- **Lambda 동시 실행**: 최대 1000개 동시 요청 처리
+- **Auto Scaling**: 트래픽에 따른 자동 확장
+- **CDN 배포**: CloudFront로 글로벌 배포
+
+## 🔒 보안
+
+- **IAM 역할**: 최소 권한 원칙 적용
+- **API 키 관리**: AWS Secrets Manager 사용
+- **CORS 설정**: 허용된 도메인만 접근
+- **입력 검증**: 모든 사용자 입력 검증
+
+## 📈 모니터링
+
+- **CloudWatch**: 실시간 메트릭 및 로그
+- **X-Ray**: 분산 추적 및 성능 분석
+- **알람 설정**: 오류율 및 응답시간 모니터링
