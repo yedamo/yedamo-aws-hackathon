@@ -23,28 +23,22 @@ function SajuResult({ personalInfo, sajuData, onChatStart }) {
 
   const generateImage = async () => {
     try {
-      // 일주에서 색깔과 동물 추출
-      const dayPillar = sajuData.day_pillar || "갑자"; // 임시 기본값
-      const color = colorMapping[dayPillar[0]] || "청색";
-      const animal = animalMapping[dayPillar[1]] || "쥐";
+      // 실제 응답 구조에서 일주 추출
+      const dayPillar = sajuData?.translatedData?.사주팔자?.일주 || "임수신(원숭이)";
+      
+      // 일주에서 천간과 지지 분리 (예: "임수신(원숭이)" -> "임", "신")
+      const heavenlyStem = sajuData?.translatedData?.일주천간?.charAt(0) || "임";
+      const earthlyBranch = dayPillar.match(/[자축인묘진사오미신유술해]/)?.[0] || "신";
+      
+      const color = colorMapping[heavenlyStem] || "흑색";
+      const animal = animalMapping[earthlyBranch] || "원숭이";
 
-      // 임시 고정 데이터 (추후 실제 사주 데이터로 교체)
       const requestData = {
-        animal: animal,
         color: color,
-        gender: personalInfo.gender || "neutral",
-        elements: {
-          wood: 2,
-          fire: 1,
-          earth: 3,
-          metal: 1,
-          water: 1
-        },
-        dominant_element: "earth",
-        yin_yang_balance: "balanced"
+        animal: animal
       };
 
-      const response = await fetch(import.meta.env.VITE_IMAGE_API_URL || 'https://9s8j589vw9.execute-api.us-east-1.amazonaws.com/prod/generate', {
+      const response = await fetch('https://hyku48m7d6.execute-api.us-east-1.amazonaws.com/prod/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -80,27 +74,32 @@ function SajuResult({ personalInfo, sajuData, onChatStart }) {
       <div className="space-y-6">
         <div className="bg-purple-50 p-4 rounded-lg">
           <h3 className="text-lg font-semibold text-purple-800 mb-2">사주팔자</h3>
-          <div className="grid grid-cols-2 gap-2 text-sm text-gray-700">
-            <div><span className="font-medium">년주:</span> {sajuData.year_pillar}</div>
-            <div><span className="font-medium">월주:</span> {sajuData.month_pillar}</div>
-            <div><span className="font-medium">일주:</span> {sajuData.day_pillar}</div>
-            <div><span className="font-medium">시주:</span> {sajuData.hour_pillar}</div>
+          <div className="grid grid-cols-3 gap-2 text-sm text-gray-700">
+            <div><span className="font-medium">년주:</span> {sajuData?.translatedData?.사주팔자?.년주 || 'N/A'}</div>
+            <div><span className="font-medium">월주:</span> {sajuData?.translatedData?.사주팔자?.월주 || 'N/A'}</div>
+            <div><span className="font-medium">일주:</span> {sajuData?.translatedData?.사주팔자?.일주 || 'N/A'}</div>
           </div>
         </div>
 
         <div className="bg-blue-50 p-4 rounded-lg">
           <h3 className="text-lg font-semibold text-blue-800 mb-2">오행 분석</h3>
-          <p className="text-gray-700">{sajuData.elements}</p>
+          <div className="space-y-1">
+            {sajuData?.wuxingAnalysis?.map((analysis, index) => (
+              <p key={index} className="text-gray-700 text-sm">{analysis}</p>
+            )) || <p className="text-gray-700">오행 분석 정보를 불러오는 중...</p>}
+          </div>
         </div>
 
         <div className="bg-green-50 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold text-green-800 mb-2">출생 정보</h3>
-          <p className="text-gray-700">
-            생년월일: {sajuData.birth_date}
-          </p>
+          <h3 className="text-lg font-semibold text-green-800 mb-2">기본 정보</h3>
+          <div className="space-y-1 text-sm text-gray-700">
+            <div><span className="font-medium">띠:</span> {sajuData?.translatedData?.띠 || 'N/A'}</div>
+            <div><span className="font-medium">별자리:</span> {sajuData?.translatedData?.별자리 || 'N/A'}</div>
+            <div><span className="font-medium">일주천간:</span> {sajuData?.translatedData?.일주천간 || 'N/A'}</div>
+          </div>
         </div>
 
-        {sajuData.fallback_used && (
+        {sajuData?.fallback_used && (
           <div className="bg-yellow-50 p-4 rounded-lg">
             <h3 className="text-lg font-semibold text-yellow-800 mb-2">분석 정보</h3>
             <p className="text-sm text-gray-600">
