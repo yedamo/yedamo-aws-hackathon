@@ -81,14 +81,23 @@ function generateCacheKey(name) {
 // 사주 기본 분석 API (캐시 지원)
 app.post("/saju/basic", async (req, res) => {
   try {
-    const {
-      birthDate,
-      birthTime,
-      isLunar,
-      gender,
-      name,
-      cacheKey: requestCacheKey,
-    } = req.body;
+    // 두 가지 형식 지원: birthDate/birthTime 또는 birth_info 객체
+    let birthDate, birthTime, isLunar, gender, name, requestCacheKey;
+    
+    if (req.body.birth_info) {
+      // birth_info 객체 형식
+      const { birth_info } = req.body;
+      name = req.body.name;
+      requestCacheKey = req.body.cacheKey;
+      
+      birthDate = `${birth_info.year}-${birth_info.month.toString().padStart(2, '0')}-${birth_info.day.toString().padStart(2, '0')}`;
+      birthTime = `${birth_info.hour.toString().padStart(2, '0')}:00`;
+      isLunar = birth_info.isLunar || false;
+      gender = birth_info.gender || "male";
+    } else {
+      // 기존 birthDate/birthTime 형식
+      ({ birthDate, birthTime, isLunar, gender, name, cacheKey: requestCacheKey } = req.body);
+    }
 
     if (!birthDate || !birthTime) {
       return res
@@ -115,7 +124,7 @@ app.post("/saju/basic", async (req, res) => {
           if (!needsRefresh) {
             console.log("캐시에서 데이터 반환:", cacheKey);
             return res.json({
-              cacheKey: cacheKey,
+              cache_key: cacheKey,
               cached: true,
               needsRefresh: false,
               ...cachedItem,
@@ -189,7 +198,7 @@ app.post("/saju/basic", async (req, res) => {
     }
 
     res.json({
-      cacheKey: cacheKey,
+      cache_key: cacheKey,
       cached: false,
       needsRefresh: needsRefresh,
       redis_connected: redisConnected,
@@ -226,7 +235,7 @@ app.get("/api/saju/:cacheKey", async (req, res) => {
     const needsRefresh = age > 1800 - 300;
 
     res.json({
-      cacheKey: cacheKey,
+      cache_key: cacheKey,
       cached: true,
       needsRefresh: needsRefresh,
       ...cachedItem,

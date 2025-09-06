@@ -68,8 +68,8 @@ def handle_basic_saju(body):
         if response.status_code == 200:
             backend_data = response.json()
 
-            # 캐시에 저장 (backend에서 받은 cacheKey 사용)
-            cache_key = backend_data.get('cacheKey')
+            # 캐시에 저장 (backend에서 받은 cache_key 사용)
+            cache_key = backend_data.get('cache_key')
             if cache_key:
                 cache_manager.set_cache(cache_key, {
                     'birth_info': birth_info,
@@ -100,7 +100,7 @@ def handle_basic_saju(body):
 
 
 def handle_consultation(body):
-    """질의응답 API"""
+    """질의응답 API - Backend 서버 호출"""
     cache_key = body.get('cache_key', '')
     question = body.get('question', '')
 
@@ -109,28 +109,36 @@ def handle_consultation(body):
     if not question:
         raise ValueError('질문이 필요합니다')
 
-    # 캐시에서 사주 데이터 조회
-    cached_data, needs_refresh = cache_manager.get_cache(cache_key)
+    # Backend API 호출
+    try:
+        backend_payload = {
+            'cache_key': cache_key,
+            'question': question
+        }
 
-    if not cached_data:
-        raise ValueError('캐시된 사주 데이터가 없습니다. 기본 사주 API를 먼저 호출하세요.')
+        response = requests.post(
+            f"{BACKEND_URL}/saju/consultation",
+            json=backend_payload,
+            timeout=30
+        )
 
-    # 갱신 필요 시 캐시 갱신
-    if needs_refresh:
-        cache_manager.refresh_cache(cache_key)
+        if response.status_code == 200:
+            backend_data = response.json()
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps(backend_data, ensure_ascii=False)
+            }
+        else:
+            raise Exception(f"Backend API 오류: {response.status_code} - {response.text}")
 
-    # 멀티에이전트 상담
-    supervisor = SupervisorAgent()
-    result = supervisor.route_request(cached_data['birth_info'], question)
-
-    return {
-        'statusCode': 200,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        },
-        'body': json.dumps(result, ensure_ascii=False)
-    }
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Backend 서버 연결 실패: {str(e)}")
+    except Exception as e:
+        raise Exception(f"상담 데이터 처리 실패: {str(e)}")
 
 
 def validate_birth_info(body):

@@ -70,3 +70,8 @@ backend/venv/
 *.tmp
 *.temp
 .cache/
+cdk/cdk.out.*
+
+# lambda
+lambda/[bcdijprsu]*
+lambda/async_*
