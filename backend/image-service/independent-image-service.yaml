@@ -1,0 +1,226 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Independent Saju Image Generation Service - Separated from main stack'
+
+Parameters:
+  StackPrefix:
+    Type: String
+    Default: 'saju-independent'
+    Description: 'Prefix for all resources to ensure independence'
+
+Resources:
+  ImageGeneratorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${StackPrefix}-image-generator-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockInvokePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: 'arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-canvas-v1:0'
+
+  ImageGeneratorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${StackPrefix}-image-generator'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt ImageGeneratorRole.Arn
+      Timeout: 180
+      MemorySize: 1024
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import base64
+          from typing import Dict, Any
+
+          def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
+              try:
+                  headers = {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Methods': 'POST,OPTIONS',
+                      'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
+                  }
+                  
+                  if event.get('httpMethod') == 'OPTIONS':
+                      return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'message': 'CORS preflight'})}
+                  
+                  body = json.loads(event.get('body', '{}'))
+                  animal = body.get('animal', '')
+                  color = body.get('color', '')
+                  gender = body.get('gender', 'neutral')
+                  dominant_element = body.get('dominant_element', '')
+                  yin_yang_balance = body.get('yin_yang_balance', 'balanced')
+                  
+                  if not animal or not color:
+                      return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'animal과 color 파라미터가 필요합니다'})}
+                  
+                  animal_mapping = {'쥐': 'mouse', '소': 'ox', '호랑이': 'tiger', '토끼': 'rabbit', '용': 'dragon', '뱀': 'snake', '말': 'horse', '양': 'sheep', '원숭이': 'monkey', '닭': 'rooster', '개': 'dog', '돼지': 'pig'}
+                  
+                  element_backgrounds = {
+                      'wood': 'lush green forest background with ancient trees and glowing leaves',
+                      'fire': 'volcanic landscape with glowing lava and flame effects in background',
+                      'earth': 'mountain cave with crystal formations and earthy stone textures',
+                      'metal': 'shimmering metallic temple with golden reflections and sharp geometric patterns',
+                      'water': 'serene lake with waterfalls and misty clouds in mystical blue atmosphere',
+                      'balanced': 'harmonious mystical landscape with elements of all five elements'
+                  }
+                  
+                  element_styles = {
+                      'wood': 'nature-infused, with leaf patterns on fur/scales',
+                      'fire': 'flame-like markings, glowing ember effects',
+                      'earth': 'rocky texture, crystal embedded',
+                      'metal': 'metallic sheen, armor-like scales',
+                      'water': 'flowing, translucent, bubble effects',
+                      'balanced': 'harmonious blend of all elemental features'
+                  }
+                  
+                  yin_yang_styles = {'yin_dominant': 'soft, gentle, peaceful, moonlit', 'yang_dominant': 'bright, active, sunny, vibrant', 'balanced': 'harmonious, balanced'}
+                  gender_styles = {'male': 'strong, powerful', 'female': 'elegant, graceful', 'neutral': 'balanced'}
+                  
+                  english_animal = animal_mapping.get(animal, animal)
+                  base_prompt = f"Cute chibi-style {english_animal} pokemon-like creature with {color} coloring"
+                  background = element_backgrounds.get(dominant_element, 'mystical fantasy background')
+                  
+                  style_elements = []
+                  if dominant_element and dominant_element in element_styles:
+                      style_elements.append(element_styles[dominant_element])
+                  if yin_yang_balance in yin_yang_styles:
+                      style_elements.append(yin_yang_styles[yin_yang_balance])
+                  if gender in gender_styles:
+                      style_elements.append(gender_styles[gender])
+                  
+                  style_part = ', '.join(style_elements) if style_elements else 'adorable'
+                  prompt = f"{base_prompt}, {style_part}, {background}, kawaii anime art style, highly detailed, soft lighting, no humans"
+                  
+                  bedrock = boto3.client('bedrock-runtime')
+                  request_body = {
+                      "taskType": "TEXT_IMAGE",
+                      "textToImageParams": {
+                          "text": prompt,
+                          "negativeText": "human, person, people, man, woman, face, hands, realistic, dark, scary, ugly"
+                      },
+                      "imageGenerationConfig": {
+                          "numberOfImages": 1,
+                          "height": 1024,
+                          "width": 1024,
+                          "cfgScale": 8.0
+                      }
+                  }
+                  
+                  response = bedrock.invoke_model(modelId='amazon.nova-canvas-v1:0', body=json.dumps(request_body))
+                  response_body = json.loads(response['body'].read())
+                  image_base64 = response_body['images'][0]
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': headers,
+                      'body': json.dumps({
+                          'success': True,
+                          'image': image_base64,
+                          'prompt': prompt,
+                          'color': color,
+                          'animal': animal,
+                          'gender': gender,
+                          'dominant_element': dominant_element,
+                          'yin_yang_balance': yin_yang_balance
+                      })
+                  }
+              except Exception as e:
+                  return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+
+  ImageGeneratorApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${StackPrefix}-image-api'
+      Description: 'Independent Saju Image Generation API'
+      EndpointConfiguration:
+        Types:
+          - EDGE
+
+  ImageGeneratorResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ImageGeneratorApi
+      ParentId: !GetAtt ImageGeneratorApi.RootResourceId
+      PathPart: generate
+
+  ImageGeneratorMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ImageGeneratorApi
+      ResourceId: !Ref ImageGeneratorResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ImageGeneratorFunction.Arn}/invocations'
+
+  ImageGeneratorOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ImageGeneratorApi
+      ResourceId: !Ref ImageGeneratorResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Origin: false
+
+  ImageGeneratorDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ImageGeneratorMethod
+      - ImageGeneratorOptionsMethod
+    Properties:
+      RestApiId: !Ref ImageGeneratorApi
+      StageName: prod
+
+  ImageGeneratorLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ImageGeneratorFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ImageGeneratorApi}/*/*'
+
+Outputs:
+  IndependentImageApiUrl:
+    Description: 'Independent Image Generation API URL'
+    Value: !Sub 'https://${ImageGeneratorApi}.execute-api.${AWS::Region}.amazonaws.com/prod/generate'
+    Export:
+      Name: !Sub '${StackPrefix}-image-api-url'
+  
+  LambdaFunctionName:
+    Description: 'Lambda Function Name'
+    Value: !Ref ImageGeneratorFunction
+    Export:
+      Name: !Sub '${StackPrefix}-lambda-function-name'
