@@ -71,6 +71,13 @@
 - **Nova Canvas** - 이미지 생성
 - **MCP Protocol** - 정밀 사주 계산
 
+## 데모 캡처
+
+![Demo1](1.png)
+![Demo2](2.png)
+![Demo3](3.png)
+
+
 ## 📦 설치 및 실행
 
 ### 사전 요구사항
@@ -103,25 +110,6 @@ yarn dev
 
 # 4. Redis 실행 (Docker)
 docker run -d -p 6379:6379 redis:alpine
-```
-
-### AWS 배포
-```bash
-# 1. CDK 설치
-npm install -g aws-cdk
-
-# 2. Python 의존성 설치
-cd cdk
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# 3. CDK 배포
-cdk bootstrap
-cdk deploy
-
-# 4. 이미지 생성 서비스 배포
-./deploy-image-service.sh
 ```
 
 ## 🔧 API 사용법
@@ -184,18 +172,6 @@ python test/test_client_new.py
 # 이미지 생성 테스트
 python test_image_api.py
 ```
-
-## 📊 성능 최적화
-
-### 캐싱 전략
-- **Redis 캐싱**: 사주 계산 결과 24시간 캐싱
-- **API 응답 캐싱**: 동일 요청 즉시 응답
-- **이미지 캐싱**: 생성된 이미지 S3 저장
-
-### 확장성
-- **Lambda 동시 실행**: 최대 1000개 동시 요청 처리
-- **Auto Scaling**: 트래픽에 따른 자동 확장
-- **CDN 배포**: CloudFront로 글로벌 배포
 
 ## 🔒 보안
 
