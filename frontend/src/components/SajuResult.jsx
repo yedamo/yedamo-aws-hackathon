@@ -44,7 +44,7 @@ function SajuResult({ personalInfo, sajuData, onChatStart }) {
         yin_yang_balance: "balanced"
       };
 
-      const response = await fetch('https://w3qvjjo80g.execute-api.us-east-1.amazonaws.com/prod/image-generate', {
+      const response = await fetch(import.meta.env.VITE_IMAGE_API_URL || 'https://9s8j589vw9.execute-api.us-east-1.amazonaws.com/prod/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
