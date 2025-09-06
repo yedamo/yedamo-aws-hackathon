@@ -161,6 +161,27 @@ class YedamoStack(Stack):
             }
         )
 
+        # 이미지 생성 Lambda 역할 (VPC 없이)
+        image_lambda_role = iam.Role(
+            self, "ImageLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaBasicExecutionRole")
+            ],
+            inline_policies={
+                "BedrockAccess": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            effect=iam.Effect.ALLOW,
+                            actions=["bedrock:InvokeModel"],
+                            resources=["*"]
+                        )
+                    ]
+                )
+            }
+        )
+
         # Lambda 함수 (멀티에이전트 + 캐시 지원)
         saju_lambda = _lambda.Function(
             self, "SajuLambda",
@@ -183,6 +204,17 @@ class YedamoStack(Stack):
                 "CACHE_REFRESH_THRESHOLD": "300",  # 5분
                 "BACKEND_URL": f"http://{backend_instance.instance_public_ip}:3001"
             }
+        )
+
+        # 이미지 생성 Lambda 함수
+        image_lambda = _lambda.Function(
+            self, "ImageGeneratorLambda",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            handler="image_generator.lambda_handler",
+            code=_lambda.Code.from_asset("../lambda"),
+            role=image_lambda_role,
+            timeout=Duration.seconds(120),
+            memory_size=1024
         )
 
         # API Gateway
@@ -217,13 +249,11 @@ class YedamoStack(Stack):
         consultation_resource = saju_resource.add_resource("consultation")
         consultation_resource.add_method("POST", lambda_integration)
 
-        # Lambda 경로: /saju/ai/* (멀티에이전트 - 추가 기능)
-        ai_resource = saju_resource.add_resource("ai")
-        ai_basic_resource = ai_resource.add_resource("basic")
-        ai_basic_resource.add_method("POST", lambda_integration)
-        
-        ai_consultation_resource = ai_resource.add_resource("consultation")
-        ai_consultation_resource.add_method("POST", lambda_integration)
+        # 이미지 생성 API
+        image_resource = api.root.add_resource("image-generate")
+        image_integration = apigw.LambdaIntegration(image_lambda)
+        image_resource.add_method("POST", image_integration)
+        image_resource.add_method("OPTIONS", image_integration)
 
         # ElastiCache CLI용 베스천 호스트
         bastion_security_group = ec2.SecurityGroup(

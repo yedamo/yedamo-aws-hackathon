@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Add image-generate endpoint to existing Yedamo API'
+
+Parameters:
+  ExistingApiId:
+    Type: String
+    Default: w3qvjjo80g
+    Description: Existing API Gateway ID
+  
+  RootResourceId:
+    Type: String
+    Default: 1ot96nt3o7
+    Description: Root resource ID of existing API
+
+Resources:
+  # Image Generate Resource
+  ImageGenerateResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ExistingApiId
+      ParentId: !Ref RootResourceId
+      PathPart: image-generate
+
+  # POST Method
+  ImageGeneratePostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ExistingApiId
+      ResourceId: !Ref ImageGenerateResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:yedamo-image-generator/invocations'
+
+  # OPTIONS Method for CORS
+  ImageGenerateOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ExistingApiId
+      ResourceId: !Ref ImageGenerateResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+            ResponseTemplates:
+              application/json: ''
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  # Lambda Permission
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: yedamo-image-generator
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ExistingApiId}/*/*'
+
+  # API Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ImageGeneratePostMethod
+      - ImageGenerateOptionsMethod
+    Properties:
+      RestApiId: !Ref ExistingApiId
+      StageName: prod
+      Description: Added image-generate endpoint
+
+Outputs:
+  ImageGenerateEndpoint:
+    Description: Image generation endpoint URL
+    Value: !Sub 'https://${ExistingApiId}.execute-api.${AWS::Region}.amazonaws.com/prod/image-generate'
